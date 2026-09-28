@@ -4,7 +4,7 @@ Board templates for [Lanework](https://github.com/laneworkapp), the Mac kanban a
 
 ## Key features
 
-- One YAML file per template, `templates/<slug>.yaml`. The file name is the template's stable slug.
+- One YAML file per template, `templates/<slug>.lanework-template`. The file name is the template's stable slug, and the extension is Lanework's template type, the same one Save as Template writes.
 - A descriptor is shaped like the board it makes: the board's own frontmatter keys, a `body`, and `lanes:` in order. A lane lists its own keys and can carry an optional `cards:` list in the same shape.
 - `template:` holds the chooser's keys: `order`, and `author` as `{name, url}`, where `url` is a GitHub profile.
 - The app writes every byte of a new board itself. A template carries no attachments, comments or other files.
