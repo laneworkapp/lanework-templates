@@ -1,0 +1,5 @@
+schema: 1
+title: Bad Author
+template: {order: 1, author: {name: A, url: "https://example.com/a"}}
+lanes:
+  - title: To Do

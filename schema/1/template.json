@@ -1,0 +1,46 @@
+{
+  "$schema" : "https://json-schema.org/draft/2020-12/schema",
+  "$id" : "lanework:///schema/1/template.json",
+  "title" : "Lanework template descriptor",
+  "description" : "A `.lanework-template` file (ADR 0012) — a board described rather than built (ADR 0004): the board's own frontmatter keys plus `body`, an ordered `lanes:` list with an optional `cards:` list per lane. No `id`, no stamps — the app assigns both only once the descriptor becomes a real board.",
+  "type" : "object",
+  "properties" : {
+    "schema" : {
+      "$ref" : "common.json#/$defs/schema-version",
+      "description" : "Always 1. Required at the descriptor root, unlike every other level of this format (review round 1, B1) — a `.lanework-template` file is validated stand-alone, by CI and by an editor, with neither the app nor `IntegrityRules` in the loop, so `schema` cannot be enforced the way a real board's is. It is what the Gallery's schema-skew filter reads (Q19, ADR 0009)."
+    },
+    "body" : {
+      "$ref" : "common.json#/$defs/lenient-text",
+      "description" : "The board's description and agent instructions, inline — the Markdown a real board carries below its frontmatter, spelled as a key because a descriptor is one file with no second `---` section. The same key repeats, unrowed, on each `lanes:` entry and each `cards:` entry."
+    },
+    "template" : {
+      "$ref" : "common.json#/$defs/template-descriptor-template",
+      "description" : "The template's own picker metadata — chooser position and byline (Board Templates Discovery Q15, Q17, Q34). Distinct from the inert board-level `template` every board may carry (`common.json#/$defs/template`, `board.json#/properties/template`): a descriptor's own `template:` is read for real, by the picker."
+    },
+    "lanes" : {
+      "$ref" : "common.json#/$defs/template-lanes",
+      "description" : "The board's lanes, in order (ADR 0004; Board Templates Discovery Q15, Q23). Position is the list index — a descriptor lane carries no `order` key of its own."
+    },
+    "id" : {
+      "$ref" : "common.json#/$defs/template-descriptor-forbidden",
+      "description" : "Forbidden: a board's identity is minted only once the app turns this descriptor into a real board (ADR 0004 — a descriptor has no id). Present with any value, this key fails validation outright."
+    },
+    "created" : {
+      "$ref" : "common.json#/$defs/template-descriptor-forbidden",
+      "description" : "Forbidden: a board's history starts only once the app turns this descriptor into a real board (ADR 0004 — a descriptor has no stamps). Present with any value, this key fails validation outright."
+    },
+    "modified" : {
+      "$ref" : "common.json#/$defs/template-descriptor-forbidden",
+      "description" : "Forbidden, the same rule as `created` one key over: rewritten only once the app turns this descriptor into a real board. Present with any value, this key fails validation outright."
+    },
+    "cards" : {
+      "$ref" : "common.json#/$defs/template-descriptor-forbidden",
+      "description" : "Forbidden at the root (review round 1, N3): a board's starter cards nest inside a `lanes:` entry, never at the top — there is no board-less card. Present with any value, this key fails validation outright."
+    }
+  },
+  "additionalProperties" : true,
+  "required" : [
+    "schema"
+  ],
+  "$ref" : "board.json#"
+}

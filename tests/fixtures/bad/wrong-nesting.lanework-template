@@ -1,0 +1,6 @@
+schema: 1
+title: Wrong Nesting
+lanes:
+  - title: To Do
+cards:
+  - title: Oops, cards belong inside a lane

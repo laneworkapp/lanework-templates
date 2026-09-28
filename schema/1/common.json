@@ -1,0 +1,773 @@
+{
+  "$schema" : "https://json-schema.org/draft/2020-12/schema",
+  "$id" : "lanework:///schema/1/common.json",
+  "title" : "Lanework common definitions",
+  "description" : "The value families every document shares. A lenient family is a canonical branch beside a retired one, and the retired branch carries `deprecated: true`.",
+  "$defs" : {
+    "schema-version" : {
+      "description" : "The format version, `1`. No coercion: a value that is not an integer has no reading.",
+      "type" : "integer"
+    },
+    "lenient-text" : {
+      "description" : "Any scalar reads as the text the author typed; a sequence or mapping has no reading.",
+      "anyOf" : [
+        {
+          "type" : "string"
+        },
+        {
+          "type" : "number"
+        },
+        {
+          "type" : "integer"
+        },
+        {
+          "type" : "boolean"
+        }
+      ]
+    },
+    "lenient-text-single-line" : {
+      "description" : "A title. Any scalar reads as the text the author typed; the text never carries a line break.",
+      "anyOf" : [
+        {
+          "type" : "string",
+          "pattern" : "^[^\\r\\n]*$"
+        },
+        {
+          "type" : "number"
+        },
+        {
+          "type" : "integer"
+        },
+        {
+          "type" : "boolean"
+        }
+      ]
+    },
+    "lenient-integer" : {
+      "description" : "An integer, a whole-number double, or a numeric string; a fractional value has no reading.",
+      "anyOf" : [
+        {
+          "type" : "integer"
+        },
+        {
+          "type" : "number"
+        },
+        {
+          "type" : "string"
+        }
+      ]
+    },
+    "lenient-number" : {
+      "description" : "A rank among the parent's children. The canonical value is a number; anything else reads as absent, which sorts the item last.",
+      "anyOf" : [
+        {
+          "description" : "The canonical rank. The app always writes a number.",
+          "type" : "number"
+        },
+        {
+          "description" : "Read as absent — append-at-end — by IntegrityRules.resolvedOrder (coerce-tier, silent, bytes preserved): an explicitly null key, a non-numeric scalar, and a non-finite one such as `.nan`, which YAML writes as a scalar JSON has no number for. A mapping or a sequence reads the same way, but nothing writes one.",
+          "type" : [
+            "string",
+            "null"
+          ]
+        }
+      ]
+    },
+    "lenient-bool" : {
+      "description" : "A boolean, or one of YAML 1.1's boolean words written quoted. The reader lowercases before matching, so the spellings listed here are the whole set in any casing; anything else has no reading.",
+      "anyOf" : [
+        {
+          "type" : "boolean"
+        },
+        {
+          "type" : "string",
+          "enum" : [
+            "true",
+            "True",
+            "TRUE",
+            "yes",
+            "Yes",
+            "YES",
+            "on",
+            "On",
+            "ON",
+            "y",
+            "Y",
+            "false",
+            "False",
+            "FALSE",
+            "no",
+            "No",
+            "NO",
+            "off",
+            "Off",
+            "OFF",
+            "n",
+            "N"
+          ]
+        }
+      ]
+    },
+    "timestamp" : {
+      "description" : "A YAML 1.1 timestamp — a calendar day, or a day with a time and an optional zone — as its source text, never a resolved instant. The pattern is Yams' own `Constructor.timestampPattern`: seconds are required once a time is present, the zone is `Z` (uppercase) or ±hh[:mm], and month, day and hour take one digit or two.",
+      "type" : "string",
+      "pattern" : "^([0-9][0-9][0-9][0-9])-([0-9][0-9]?)-([0-9][0-9]?)(?:(?:[Tt]|[ \\t]+)([0-9][0-9]?):([0-9][0-9]):([0-9][0-9])(?:\\.([0-9]*))?(?:[ \\t]*(Z|([-+])([0-9][0-9]?)(?::([0-9][0-9]))?))?)?$"
+    },
+    "uuid" : {
+      "description" : "A UUID, 8-4-4-4-12 hexadecimal in any case and any version. The app writes lowercase v4.",
+      "type" : "string",
+      "pattern" : "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    },
+    "identity" : {
+      "description" : "Who acted: a display name, `human` or `agent`, and an agent's model.",
+      "type" : "object",
+      "properties" : {
+        "name" : {
+          "description" : "The display name every surface that renders an identity shows.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "kind" : {
+          "description" : "`human` or `agent`, as written. The value is never policed.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "model" : {
+          "description" : "An agent's model name or level. Meaningless on a human.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "roster-ref" : {
+          "description" : "The GUID of the agent's card on the roster board — a bare UUID, never a path.",
+          "$ref" : "#/$defs/uuid"
+        }
+      },
+      "additionalProperties" : true
+    },
+    "stamp" : {
+      "description" : "When it happened and who did it.",
+      "anyOf" : [
+        {
+          "type" : "object",
+          "properties" : {
+            "at" : {
+              "$ref" : "#/$defs/timestamp"
+            },
+            "by" : {
+              "$ref" : "#/$defs/identity"
+            }
+          },
+          "additionalProperties" : true
+        },
+        {
+          "description" : "Retired: a bare timestamp scalar, read as the stamp's `at` with no identity. Write the mapping.",
+          "deprecated" : true,
+          "$ref" : "#/$defs/timestamp"
+        }
+      ]
+    },
+    "icon" : {
+      "description" : "The item's SF Symbol and the tint it wears.",
+      "anyOf" : [
+        {
+          "type" : "object",
+          "properties" : {
+            "glyph" : {
+              "description" : "An SF Symbol name. Never checked against the system catalogue: an unknown name draws the level's default.",
+              "$ref" : "#/$defs/lenient-text"
+            },
+            "color" : {
+              "description" : "A palette name spelled exactly as the palette spells it, or a `#RRGGBB[AA]` hex.",
+              "$ref" : "#/$defs/lenient-text"
+            }
+          },
+          "additionalProperties" : true
+        },
+        {
+          "description" : "Retired: a bare scalar, read as `{glyph: …}`. Write the mapping.",
+          "deprecated" : true,
+          "$ref" : "#/$defs/lenient-text"
+        }
+      ]
+    },
+    "background" : {
+      "description" : "Lane and card only. `{color: …}` — a mapping is the only shape; a bare scalar has no reading.",
+      "type" : "object",
+      "properties" : {
+        "color" : {
+          "description" : "A palette name or a `#RRGGBB[AA]` hex. An absent colour paints nothing.",
+          "$ref" : "#/$defs/lenient-text"
+        }
+      },
+      "additionalProperties" : true
+    },
+    "waiting" : {
+      "description" : "Card only. The card is blocked on a human's reply. Set by an agent; removed by the app once a human has commented on the card later than `since`. A mapping is the only shape.",
+      "type" : "object",
+      "properties" : {
+        "for" : {
+          "description" : "Whose attention is asked for — which machine draws the mark: a handle matched case-insensitively, or `human` / `operator` for any human. Absent means any human.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "since" : {
+          "description" : "When the flag was set. A human comment created strictly later than this is what clears it; without a readable `since` the app never clears the flag.",
+          "$ref" : "#/$defs/timestamp"
+        },
+        "comment" : {
+          "description" : "The uuid of the ask comment on this card's own thread. Identity-shaped or no reading at all — a bare identity, never a path.",
+          "$ref" : "#/$defs/lenient-text"
+        }
+      },
+      "additionalProperties" : true
+    },
+    "group" : {
+      "description" : "How a lane's cards are sectioned on screen.",
+      "anyOf" : [
+        {
+          "type" : "object",
+          "properties" : {
+            "by" : {
+              "description" : "`modified`, `created`, `due`, `priority` or `component`. A name this build does not know reads as no grouping and keeps its bytes.",
+              "$ref" : "#/$defs/lenient-text"
+            },
+            "direction" : {
+              "description" : "`ascending` or `descending` (the default), `asc`/`desc` read as synonyms. Reorders sections only.",
+              "$ref" : "#/$defs/lenient-text"
+            }
+          },
+          "additionalProperties" : true
+        },
+        {
+          "description" : "Retired: a bare scalar, read as `{by: …}`. Write the two-subkey mapping.",
+          "deprecated" : true,
+          "$ref" : "#/$defs/lenient-text"
+        }
+      ]
+    },
+    "labels" : {
+      "description" : "A card's labels — a list of self-sufficient label maps, each carrying everything a reader needs.",
+      "type" : "array",
+      "items" : {
+        "$ref" : "#/$defs/label"
+      }
+    },
+    "label" : {
+      "description" : "One label, carrying every property its definition had at write time — the stamps are the whole answer at read.",
+      "type" : "object",
+      "properties" : {
+        "text" : {
+          "description" : "The identity within its kind, compared case-insensitively, display spelling preserved.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "rank" : {
+          "description" : "The number a ranked kind sorts by, and the exact grouping key. Absent on an open kind.",
+          "$ref" : "#/$defs/lenient-integer"
+        },
+        "color" : {
+          "description" : "The value's own colour, already flattened at write: its own, else its kind's.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "icon" : {
+          "description" : "The value's own mark. Never inherited from the kind: a value with no icon stamps none.",
+          "$ref" : "#/$defs/icon"
+        },
+        "kind" : {
+          "description" : "The kind this value belongs to. Absent means implied by context — `default` in a list, the key's own kind on `priority`/`component`, the containing definition on a `values` entry. A built-in kind is never stamped.",
+          "$ref" : "#/$defs/label-kind"
+        }
+      },
+      "additionalProperties" : true
+    },
+    "sugar-label" : {
+      "description" : "One label at a sugar key — `priority` or `component`. The key names the kind, so the value never carries one.",
+      "type" : "object",
+      "properties" : {
+        "text" : {
+          "description" : "The identity within its kind, compared case-insensitively, display spelling preserved.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "rank" : {
+          "description" : "The number a ranked kind sorts by, and the exact grouping key. Absent on an open kind.",
+          "$ref" : "#/$defs/lenient-integer"
+        },
+        "color" : {
+          "description" : "The value's own colour, already flattened at write: its own, else its kind's.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "icon" : {
+          "description" : "The value's own mark. Never inherited from the kind: a value with no icon stamps none.",
+          "$ref" : "#/$defs/icon"
+        },
+        "kind" : {
+          "description" : "Forbidden here: the key names the kind, and a stamped `kind` on a sugar value is not read.",
+          "not" : {}
+        }
+      },
+      "additionalProperties" : true
+    },
+    "label-kind" : {
+      "description" : "The identity and presentation of a kind of label.",
+      "type" : "object",
+      "properties" : {
+        "type" : {
+          "description" : "The identity — kebab-case, matched case-insensitively. `default`, `priority` and `component` are built in.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "text" : {
+          "description" : "The optional display name; absent displays as the type.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "color" : {
+          "description" : "The kind's own colour, separate from any value's.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "icon" : {
+          "description" : "The kind's own mark; in compact presentation it stands in for the kind's name.",
+          "$ref" : "#/$defs/icon"
+        }
+      },
+      "additionalProperties" : true
+    },
+    "label-names" : {
+      "description" : "LabelValue names, deduplicated case-insensitively with the first spelling winning.",
+      "anyOf" : [
+        {
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/$defs/lenient-text"
+          }
+        },
+        {
+          "description" : "A bare scalar reads as a one-element list. The app always writes the list.",
+          "$ref" : "#/$defs/lenient-text"
+        }
+      ]
+    },
+    "label-kinds" : {
+      "description" : "LabelValue kinds. A sequence is the only shape with a reading.",
+      "type" : "array",
+      "items" : {
+        "type" : "object",
+        "properties" : {
+          "type" : {
+            "description" : "The kind's identity, and what a shadowing definition matches on.",
+            "$ref" : "#/$defs/lenient-text"
+          },
+          "text" : {
+            "description" : "The kind's display name.",
+            "$ref" : "#/$defs/lenient-text"
+          },
+          "color" : {
+            "description" : "The kind's own colour — a palette name or a hex.",
+            "$ref" : "#/$defs/lenient-text"
+          },
+          "icon" : {
+            "description" : "The kind's own mark.",
+            "$ref" : "#/$defs/icon"
+          },
+          "single" : {
+            "description" : "A card carries at most one value of this kind. A writer's constraint, never a read-time collapse.",
+            "$ref" : "#/$defs/lenient-bool"
+          },
+          "values" : {
+            "description" : "Present — even empty — makes the kind closed: a card value names one of these by text, and stamps its rank.",
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/$defs/label"
+            }
+          }
+        },
+        "additionalProperties" : true
+      }
+    },
+    "legacy-priority-roster" : {
+      "description" : "The retired priority roster. Not read at all since 2026-09-07: a level still carrying it keeps its bytes, and it converts once into a `priority` entry under `labels` / `default-labels`.",
+      "type" : "array",
+      "items" : {
+        "anyOf" : [
+          {
+            "type" : "object",
+            "properties" : {
+              "name" : {
+                "description" : "What a card's own `priority` key writes and a human reads.",
+                "$ref" : "#/$defs/lenient-text"
+              },
+              "value" : {
+                "description" : "The sort key. Lowest value is the highest priority.",
+                "$ref" : "#/$defs/lenient-integer"
+              },
+              "color" : {
+                "description" : "Tints the chip's text and outline only; the capsule stays unfilled.",
+                "$ref" : "#/$defs/lenient-text"
+              }
+            },
+            "additionalProperties" : true
+          },
+          {
+            "description" : "A bare name, read as `{name, value: its 1-based position}`.",
+            "$ref" : "#/$defs/lenient-text"
+          }
+        ]
+      }
+    },
+    "thumb-sizes" : {
+      "description" : "Square-fit thumbnail sizes, each naming a generatable `thumb.<N>.png`. An explicit `[]` is a real, empty roster.",
+      "anyOf" : [
+        {
+          "type" : "array",
+          "items" : {
+            "$ref" : "#/$defs/lenient-integer"
+          }
+        },
+        {
+          "description" : "A bare scalar reads as a one-element list. The app always writes the list.",
+          "$ref" : "#/$defs/lenient-integer"
+        }
+      ]
+    },
+    "palette-colors" : {
+      "description" : "A named colour table, unioned over the built-in one with per-name shadowing.",
+      "type" : "array",
+      "items" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "description" : "The kebab-case identity board files write, matched exactly.",
+            "$ref" : "#/$defs/lenient-text"
+          },
+          "rgb" : {
+            "description" : "A `#RRGGBB` hex, six digits: transparency is `alpha`, never folded in here.",
+            "$ref" : "#/$defs/lenient-text"
+          },
+          "alpha" : {
+            "description" : "0–1, default 1. Above the top clamps; a negative reads as 1.",
+            "type" : "number"
+          }
+        },
+        "additionalProperties" : true
+      }
+    },
+    "filter-clauses" : {
+      "description" : "Which of a lane's cards show. AND across clauses; a clause this build cannot read is dropped and the rest apply.",
+      "type" : "array",
+      "items" : {
+        "type" : "object",
+        "properties" : {
+          "by" : {
+            "description" : "`modified`, `created`, `due`, `label`, `priority`, `component` or `waiting`.",
+            "$ref" : "#/$defs/lenient-text"
+          },
+          "op" : {
+            "description" : "`older`/`newer` for a date clause, `equal`/`not-equal` for the others.",
+            "$ref" : "#/$defs/lenient-text"
+          },
+          "value" : {
+            "description" : "A duration `Nm`/`Nh`/`Nd`/`Nw` for a date clause, a name for the others.",
+            "$ref" : "#/$defs/lenient-text"
+          }
+        },
+        "additionalProperties" : true
+      }
+    },
+    "reactions" : {
+      "description" : "A comment's emoji reactions. A sequence is the only shape with a reading; an entry nobody can name is dropped.",
+      "type" : "array",
+      "items" : {
+        "type" : "object",
+        "properties" : {
+          "emoji" : {
+            "description" : "The reaction itself.",
+            "$ref" : "#/$defs/lenient-text"
+          },
+          "at" : {
+            "description" : "When it was left.",
+            "$ref" : "#/$defs/timestamp"
+          },
+          "by" : {
+            "description" : "Who left it.",
+            "$ref" : "#/$defs/identity"
+          }
+        },
+        "additionalProperties" : true
+      }
+    },
+    "logging" : {
+      "description" : "The board log's own settings, cascaded board → global → built-in `off`.",
+      "anyOf" : [
+        {
+          "type" : "object",
+          "properties" : {
+            "level" : {
+              "description" : "`off`, `error`, `warning`, `info` or `debug`.",
+              "$ref" : "#/$defs/lenient-text"
+            },
+            "retain" : {
+              "description" : "Days of log files to keep. A negative or unreadable value reads as absent, never as `0`.",
+              "$ref" : "#/$defs/lenient-integer"
+            }
+          },
+          "additionalProperties" : true
+        },
+        {
+          "description" : "A bare scalar reads as `level` alone, and carries no `retain`. The app always writes the mapping.",
+          "$ref" : "#/$defs/lenient-text"
+        }
+      ]
+    },
+    "template" : {
+      "type" : "object",
+      "properties" : {
+        "order" : {
+          "description" : "Display position in the template chooser.",
+          "$ref" : "#/$defs/lenient-integer"
+        }
+      },
+      "additionalProperties" : true
+    },
+    "workspace" : {
+      "type" : "object",
+      "properties" : {
+        "role" : {
+          "description" : "The role this board plays in a multi-board workspace (pipeline, roster, archive, design, review, …). Open vocabulary, trusted and never policed.",
+          "$ref" : "#/$defs/lenient-text"
+        }
+      },
+      "additionalProperties" : true
+    },
+    "board-remote" : {
+      "description" : "The board's tracker binding. Committed with the board, never a machine-local file; holds no secret.",
+      "type" : "object",
+      "properties" : {
+        "tracker" : {
+          "description" : "The connector kind, lowercase. `gitea` is the only value in the MVP.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "url" : {
+          "description" : "The tracker's base URL. With the token's user it keys the Keychain item.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "project" : {
+          "description" : "The tracker's project identity, `owner/repo` on Gitea.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "label-scope" : {
+          "description" : "The exclusive scoped-label scope whose values become states. Absent, only `open` and `closed` exist.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "scope" : {
+          "description" : "Narrows which tickets become cards, under the tracker's own key names. Absent, every ticket of the project is ingested, closed included.",
+          "type" : "object",
+          "properties" : {
+            "milestone" : {
+              "description" : "Gitea's own scope key: one milestone, named by title.",
+              "$ref" : "#/$defs/lenient-text"
+            }
+          },
+          "additionalProperties" : true
+        },
+        "cadence" : {
+          "description" : "The per-board poll cadence. Each of the three intervals is optional independently; omitted or unparsable, the app's own built-in constant.",
+          "type" : "object",
+          "properties" : {
+            "poll" : {
+              "description" : "The first poll fired after a change is seen, a duration (`15s`, `300s`, `30m`). Omitted, the app's built-in constant (15 s).",
+              "$ref" : "#/$defs/lenient-text"
+            },
+            "max" : {
+              "description" : "The cap the idle poll's back-off doubles up to, a duration. Omitted, the app's built-in constant (300 s).",
+              "$ref" : "#/$defs/lenient-text"
+            },
+            "sweep" : {
+              "description" : "The full per-issue listing that finds deleted issues and comments, a duration. Omitted, the app's built-in constant (30 min).",
+              "$ref" : "#/$defs/lenient-text"
+            }
+          },
+          "additionalProperties" : true
+        }
+      },
+      "additionalProperties" : true
+    },
+    "card-remote" : {
+      "description" : "The one tracker ticket this card mirrors. Absent means not yet published to the bound tracker.",
+      "type" : "object",
+      "properties" : {
+        "tracker" : {
+          "description" : "As the board binding's own — repeated so the card stands alone.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "url" : {
+          "description" : "As the board binding's own — repeated so the card stands alone.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "project" : {
+          "description" : "As the board binding's own — repeated so the card stands alone.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "number" : {
+          "description" : "The ticket's number within the project.",
+          "$ref" : "#/$defs/lenient-integer"
+        },
+        "link" : {
+          "description" : "The ticket's web URL.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "state" : {
+          "description" : "The ticket's state as the connector derives it, mirrored by the card's own `state`-kind label.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "updated" : {
+          "description" : "The tracker's own last-updated stamp from the last successful sync — never a local clock.",
+          "$ref" : "#/$defs/timestamp"
+        }
+      },
+      "additionalProperties" : true
+    },
+    "comment-remote" : {
+      "description" : "The one Gitea comment or timeline event this comment mirrors. Absent means not yet published to the bound tracker.",
+      "type" : "object",
+      "properties" : {
+        "tracker" : {
+          "description" : "As the board binding's own — repeated so the comment stands alone.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "url" : {
+          "description" : "As the board binding's own — repeated so the comment stands alone.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "project" : {
+          "description" : "As the board binding's own — repeated so the comment stands alone.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "number" : {
+          "description" : "The issue's number within the project.",
+          "$ref" : "#/$defs/lenient-integer"
+        },
+        "id" : {
+          "description" : "The Gitea comment id, or, on an event record, the timeline entry's own id.",
+          "$ref" : "#/$defs/lenient-integer"
+        },
+        "link" : {
+          "description" : "The comment's web URL.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "updated" : {
+          "description" : "The tracker's own last-updated stamp from the last successful sync — never a local clock.",
+          "$ref" : "#/$defs/timestamp"
+        },
+        "event" : {
+          "description" : "The connector's stable name for the tracker timeline event this record mirrors (`label`, `close`, `ref`, …), event records only: Gitea's own type name, except that its four reference types are `ref` and `project_board` is `project_column` (GiteaConnector.eventName(forGiteaType:)). Absent means a plain comment.",
+          "$ref" : "#/$defs/lenient-text"
+        }
+      },
+      "additionalProperties" : true
+    },
+    "template-descriptor-forbidden" : {
+      "description" : "Forbidden in a template descriptor: an identity or a history stamp, both minted only when the app turns the descriptor into a real board. Present with any value, this key fails validation outright.",
+      "not" : {}
+    },
+    "template-author" : {
+      "description" : "The template's byline: a display name and a GitHub profile link.",
+      "type" : "object",
+      "properties" : {
+        "name" : {
+          "description" : "The display name every Gallery row and the chooser footer show.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "url" : {
+          "description" : "A GitHub profile link, `https://github.com/<user>` only — Q34's ruling. The chooser opens it and shows the host beside the name, so a value naming another site has no reading.",
+          "type" : "string",
+          "pattern" : "^https://github\\.com/[A-Za-z0-9][A-Za-z0-9-]*$"
+        }
+      },
+      "additionalProperties" : true
+    },
+    "template-descriptor-template" : {
+      "description" : "The template's own picker metadata: chooser position and byline. Distinct from the inert board-level `template` (`common.json#/$defs/template`) that rides along unread on an instantiated board.",
+      "type" : "object",
+      "properties" : {
+        "order" : {
+          "description" : "Display position in the template chooser.",
+          "$ref" : "#/$defs/lenient-integer"
+        },
+        "author" : {
+          "description" : "Who made this template, shown on every Gallery row and in the chooser footer.",
+          "$ref" : "#/$defs/template-author"
+        }
+      },
+      "additionalProperties" : true
+    },
+    "template-lane" : {
+      "description" : "One lane: the lane's own keys (`title`, `icon`, …) verbatim, checked against lane.json, plus `body` and an optional `cards:` list. No `id`, no `created`, no `modified`, no `order`, no `lanes` — a descriptor lane has neither an identity nor a history, and its position is its own index in the list, not a key it carries.",
+      "type" : "object",
+      "$ref" : "lane.json#",
+      "properties" : {
+        "body" : {
+          "description" : "The lane's purpose, inline — the same key the descriptor's own root carries, one level down.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "cards" : {
+          "description" : "The lane's starter cards, in order. Position is the list index, exactly as the lane's own position is.",
+          "$ref" : "#/$defs/template-cards"
+        },
+        "id" : {
+          "$ref" : "#/$defs/template-descriptor-forbidden"
+        },
+        "created" : {
+          "$ref" : "#/$defs/template-descriptor-forbidden"
+        },
+        "modified" : {
+          "$ref" : "#/$defs/template-descriptor-forbidden"
+        },
+        "order" : {
+          "description" : "Forbidden (review round 1, N3): position is the list index, not a key a descriptor lane carries (card 07ff3331).",
+          "$ref" : "#/$defs/template-descriptor-forbidden"
+        },
+        "lanes" : {
+          "description" : "Forbidden (review round 1, N3): `lanes:` nests only at the descriptor root, never inside a lane.",
+          "$ref" : "#/$defs/template-descriptor-forbidden"
+        }
+      },
+      "additionalProperties" : true
+    },
+    "template-lanes" : {
+      "description" : "The board's lanes, in order. Position is the list index — a descriptor lane has no `order` key of its own.",
+      "type" : "array",
+      "items" : {
+        "$ref" : "#/$defs/template-lane"
+      }
+    },
+    "template-card" : {
+      "description" : "One starter card: the card's own keys (`title`, `icon`, `priority`, …) verbatim, checked against card.json, plus `body`. No `id`, no `created`, no `modified`, no `order`, no `cards` — a descriptor card has neither an identity nor a history, its position is its own index in the list, and it carries no starter cards of its own.",
+      "type" : "object",
+      "$ref" : "card.json#",
+      "properties" : {
+        "body" : {
+          "description" : "The card's content, inline — the same key the descriptor's own root and its lane carry, one level down.",
+          "$ref" : "#/$defs/lenient-text"
+        },
+        "id" : {
+          "$ref" : "#/$defs/template-descriptor-forbidden"
+        },
+        "created" : {
+          "$ref" : "#/$defs/template-descriptor-forbidden"
+        },
+        "modified" : {
+          "$ref" : "#/$defs/template-descriptor-forbidden"
+        },
+        "order" : {
+          "description" : "Forbidden (review round 1, N3): position is the list index, not a key a descriptor card carries (card 07ff3331).",
+          "$ref" : "#/$defs/template-descriptor-forbidden"
+        },
+        "cards" : {
+          "description" : "Forbidden (review round 1, N3): a starter card carries no starter cards of its own.",
+          "$ref" : "#/$defs/template-descriptor-forbidden"
+        }
+      },
+      "additionalProperties" : true
+    },
+    "template-cards" : {
+      "description" : "A lane's starter cards, in order. Position is the list index.",
+      "type" : "array",
+      "items" : {
+        "$ref" : "#/$defs/template-card"
+      }
+    }
+  }
+}

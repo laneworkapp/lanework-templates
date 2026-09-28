@@ -1,0 +1,31 @@
+name: Validate templates
+
+# Runs on every PR, including from forks. Kept to `pull_request` (never
+# `pull_request_target`), read-only permissions and zero secrets, because
+# this workflow's whole job is to run untrusted, contributor-supplied YAML
+# through a parser and a schema check.
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned dependencies
+        run: pip install -r requirements.txt
+
+      - name: Validate every template descriptor
+        run: python3 scripts/validate_templates.py --annotate templates
+
+      - name: Regression check on the validator itself
+        run: python3 scripts/self_test.py

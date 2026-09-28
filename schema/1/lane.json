@@ -1,0 +1,98 @@
+{
+  "$schema" : "https://json-schema.org/draft/2020-12/schema",
+  "$id" : "lanework:///schema/1/lane.json",
+  "title" : "Lanework lane",
+  "description" : "A lane's `index.md` — depth 1 inside a board. Level is position; `kind` states it anyway.",
+  "type" : "object",
+  "properties" : {
+    "schema" : {
+      "$ref" : "common.json#/$defs/schema-version",
+      "description" : "Always 1. Below the board root a missing value reads as 1."
+    },
+    "title" : {
+      "$ref" : "common.json#/$defs/lenient-text-single-line",
+      "description" : "The lane's display name. Absent shows the untitled placeholder."
+    },
+    "kind" : {
+      "$ref" : "common.json#/$defs/lenient-text",
+      "description" : "`lane`. Written at creation; the only discriminator inside `.trash/`."
+    },
+    "created" : {
+      "$ref" : "common.json#/$defs/stamp",
+      "description" : "When the lane was filed, and by whom."
+    },
+    "modified" : {
+      "$ref" : "common.json#/$defs/stamp",
+      "description" : "The last app write that rewrote this file's content."
+    },
+    "icon" : {
+      "$ref" : "common.json#/$defs/icon",
+      "description" : "The lane's SF Symbol and the tint it wears."
+    },
+    "order" : {
+      "$ref" : "common.json#/$defs/lenient-number",
+      "description" : "Rank among lanes, ascending left-to-right. Missing or unusable reads as append-at-end."
+    },
+    "width" : {
+      "$ref" : "common.json#/$defs/lenient-integer",
+      "description" : "Width multiplier, 1 or more (default 1), no cap. A reading below 1 reads as 1."
+    },
+    "collapsed" : {
+      "$ref" : "common.json#/$defs/lenient-bool",
+      "description" : "Folds the lane to a slim strip. Absent is expanded, and the app removes the key rather than writing false."
+    },
+    "group" : {
+      "$ref" : "common.json#/$defs/group",
+      "description" : "How the lane's cards are sectioned on screen. Presentation-only: nothing writes the datapoint a lane groups by."
+    },
+    "group-by" : {
+      "$ref" : "common.json#/$defs/group",
+      "deprecated" : true,
+      "description" : "Retired: read only where `group` is absent or null, and folded into `group` on the lane's next write. Write `group`."
+    },
+    "filter" : {
+      "$ref" : "common.json#/$defs/filter-clauses",
+      "description" : "Which of the lane's cards show. AND across clauses; presentation-only, a filtered-out card is never touched."
+    },
+    "card-defaults" : {
+      "type" : "object",
+      "properties" : {
+        "labels" : {
+          "$ref" : "common.json#/$defs/label-names",
+          "description" : "The labels a fresh card born into this lane starts with, unioned case-insensitively into its own."
+        }
+      },
+      "additionalProperties" : true,
+      "description" : "What a fresh card born into this lane starts with. Applied at the mint, never on arrival."
+    },
+    "background" : {
+      "$ref" : "common.json#/$defs/background",
+      "description" : "The lane's background colour."
+    },
+    "remote-state" : {
+      "$ref" : "common.json#/$defs/lenient-text",
+      "description" : "The state this lane maps to on a tracker board — a bare value, never a tracker expression. Absent means local-only: moving a card here changes nothing remotely."
+    },
+    "iconColor" : {
+      "$ref" : "common.json#/$defs/lenient-text",
+      "deprecated" : true,
+      "description" : "Retired: folded into `icon.color` on the next icon-touching write. The mapping wins per property."
+    },
+    "modified-by" : {
+      "$ref" : "common.json#/$defs/lenient-text",
+      "deprecated" : true,
+      "description" : "Retired: folds into `modified.by`. The map wins where both are present."
+    },
+    "author" : {
+      "$ref" : "common.json#/$defs/lenient-text",
+      "deprecated" : true,
+      "description" : "Retired: folds into `created.by` as `{name: …}` by a scheduled heal at every level."
+    },
+    "deleted" : {
+      "$ref" : "common.json#/$defs/timestamp",
+      "deprecated" : true,
+      "description" : "Retired: the tombstone model. Deletion is a move into `.trash/`; a present key relocates the item."
+    }
+  },
+  "additionalProperties" : true
+}

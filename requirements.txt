@@ -1,0 +1,7 @@
+# Pinned so the lint script and CI validate against the exact same engine.
+# JSON Schema 2020-12: required, const and $ref (across schema/1/*.json) all
+# need a real implementation — jsonschema + referencing, not a hand-rolled
+# subset.
+jsonschema==4.26.0
+referencing==0.37.0
+PyYAML==6.0.3

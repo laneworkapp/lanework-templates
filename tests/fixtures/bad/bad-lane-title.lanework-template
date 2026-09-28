@@ -1,0 +1,4 @@
+schema: 1
+title: Bad Lane Title
+lanes:
+  - title: {x: 1}
