@@ -1,0 +1,16 @@
+schema: 1
+title: Bug Tracker
+icon: {glyph: ant, color: carnation}
+template: {order: 1000, author: {name: Lanework, url: "https://github.com/laneworkapp"}}
+body: Chase bugs from first report to verified fix.
+lanes:
+  - title: Reported
+    icon: {glyph: exclamationmark.bubble, color: carnation}
+  - title: Confirmed
+    icon: {glyph: ant, color: smokey-tangerine}
+  - title: Fixing
+    icon: {glyph: wrench.and.screwdriver, color: deep-sky-blue}
+  - title: Verifying
+    icon: {glyph: magnifyingglass, color: pale-violet}
+  - title: Closed
+    icon: {glyph: checkmark.seal, color: fern}

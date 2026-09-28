@@ -1,0 +1,7 @@
+schema: 1
+title: Basic
+template: {order: 100, author: {name: Lanework, url: "https://github.com/laneworkapp"}}
+body: 'A simple two-step board: things to do, things done.'
+lanes:
+  - title: To Do
+  - title: Done

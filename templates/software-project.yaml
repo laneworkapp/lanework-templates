@@ -1,0 +1,16 @@
+schema: 1
+title: Software Project
+icon: {glyph: chevron.left.forwardslash.chevron.right, color: deep-sky-blue}
+template: {order: 300, author: {name: Lanework, url: "https://github.com/laneworkapp"}}
+body: Track features from backlog through review to shipped.
+lanes:
+  - title: Backlog
+    icon: {glyph: tray.2, color: deep-cool-granite}
+  - title: Ready
+    icon: {glyph: checklist, color: deep-sky-blue}
+  - title: In Progress
+    icon: {glyph: hammer, color: smokey-tangerine}
+  - title: Review
+    icon: {glyph: eye, color: pale-violet}
+  - title: Done
+    icon: {glyph: checkmark.seal, color: fern}

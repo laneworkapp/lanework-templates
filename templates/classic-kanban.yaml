@@ -1,0 +1,12 @@
+schema: 1
+title: Classic Kanban
+icon: {glyph: rectangle.split.3x1, color: deep-sky-blue}
+template: {order: 200, author: {name: Lanework, url: "https://github.com/laneworkapp"}}
+body: 'The three-step classic: pull work into progress only when there''s room.'
+lanes:
+  - title: To Do
+    icon: {glyph: tray.full, color: deep-sky-blue}
+  - title: In Progress
+    icon: {glyph: play.circle, color: smokey-tangerine}
+  - title: Done
+    icon: {glyph: checkmark.circle, color: fern}
