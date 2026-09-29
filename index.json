@@ -1,46 +1,49 @@
-[
-  {
-    "slug": "basic",
-    "path": "templates/basic.lanework-template",
-    "schema": 1,
-    "title": "Basic",
-    "order": 100,
-    "author": {
-      "name": "Lanework",
-      "url": "https://github.com/laneworkapp"
+{
+  "version": 1,
+  "templates": [
+    {
+      "slug": "basic",
+      "path": "templates/basic.lanework-template",
+      "schema": 1,
+      "title": "Basic",
+      "order": 100,
+      "author": {
+        "name": "Lanework",
+        "url": "https://github.com/laneworkapp"
+      }
+    },
+    {
+      "slug": "classic-kanban",
+      "path": "templates/classic-kanban.lanework-template",
+      "schema": 1,
+      "title": "Classic Kanban",
+      "order": 200,
+      "author": {
+        "name": "Lanework",
+        "url": "https://github.com/laneworkapp"
+      }
+    },
+    {
+      "slug": "software-project",
+      "path": "templates/software-project.lanework-template",
+      "schema": 1,
+      "title": "Software Project",
+      "order": 300,
+      "author": {
+        "name": "Lanework",
+        "url": "https://github.com/laneworkapp"
+      }
+    },
+    {
+      "slug": "bug-tracker",
+      "path": "templates/bug-tracker.lanework-template",
+      "schema": 1,
+      "title": "Bug Tracker",
+      "order": 1000,
+      "author": {
+        "name": "Lanework",
+        "url": "https://github.com/laneworkapp"
+      }
     }
-  },
-  {
-    "slug": "classic-kanban",
-    "path": "templates/classic-kanban.lanework-template",
-    "schema": 1,
-    "title": "Classic Kanban",
-    "order": 200,
-    "author": {
-      "name": "Lanework",
-      "url": "https://github.com/laneworkapp"
-    }
-  },
-  {
-    "slug": "software-project",
-    "path": "templates/software-project.lanework-template",
-    "schema": 1,
-    "title": "Software Project",
-    "order": 300,
-    "author": {
-      "name": "Lanework",
-      "url": "https://github.com/laneworkapp"
-    }
-  },
-  {
-    "slug": "bug-tracker",
-    "path": "templates/bug-tracker.lanework-template",
-    "schema": 1,
-    "title": "Bug Tracker",
-    "order": 1000,
-    "author": {
-      "name": "Lanework",
-      "url": "https://github.com/laneworkapp"
-    }
-  }
-]
+  ]
+}

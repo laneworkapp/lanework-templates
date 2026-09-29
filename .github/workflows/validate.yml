@@ -14,8 +14,14 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          # This job never pushes; don't leave a credential (even a
+          # read-only one) sitting in .git/config while `pip install` runs
+          # untrusted-PR-adjacent tooling afterward.
+          persist-credentials: false
 
       - uses: actions/setup-python@v5
         with:

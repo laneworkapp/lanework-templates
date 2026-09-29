@@ -2,6 +2,16 @@
 # JSON Schema 2020-12: required, const and $ref (across schema/1/*.json) all
 # need a real implementation — jsonschema + referencing, not a hand-rolled
 # subset.
+#
+# The full resolved set, transitive dependencies included, at exact
+# versions (review round 1, N9) — not just the three imported directly
+# (jsonschema, referencing, PyYAML). Regenerate with:
+#   python3 -m venv /tmp/freeze && /tmp/freeze/bin/pip install jsonschema==4.26.0 referencing==0.37.0 PyYAML==6.0.3 && /tmp/freeze/bin/pip freeze
+# No hashes: this repo has no build step that benefits from --require-hashes,
+# and CI's network is already trusted for `pip install` itself.
+attrs==26.1.0
 jsonschema==4.26.0
-referencing==0.37.0
+jsonschema-specifications==2025.9.1
 PyYAML==6.0.3
+referencing==0.37.0
+rpds-py==2026.6.3

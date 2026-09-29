@@ -18,6 +18,18 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import lanework_templates as lt  # noqa: E402
 
 
+def _escape_annotation_data(text: str) -> str:
+    """GitHub workflow commands escape %, CR and LF the same way in the
+    message/data portion of a command."""
+    return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+def _escape_annotation_property(text: str) -> str:
+    """A command's key=value properties (here, `file=`) additionally escape
+    `:` and `,`, per GitHub's own workflow-command escaping rule."""
+    return _escape_annotation_data(text).replace(":", "%3A").replace(",", "%2C")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
@@ -39,6 +51,23 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     all_ok = True
+
+    # Directory-level rules (slug grammar, case-unique, no symlinks or
+    # stray files) — only meaningful for a directory argument, and only
+    # once per directory, not once per file inside it.
+    for raw in args.paths:
+        p = pathlib.Path(raw)
+        if not p.is_dir():
+            continue
+        for problem in lt.check_templates_directory(p):
+            all_ok = False
+            rel = lt.relpath(problem.file) if problem.file else lt.relpath(p)
+            print(f"FAIL  {rel} {problem.pointer}: {problem.message}", file=sys.stderr)
+            if args.annotate:
+                file_prop = _escape_annotation_property(rel)
+                data = _escape_annotation_data(f"{problem.pointer}: {problem.message}")
+                print(f"::error file={file_prop}::{data}")
+
     for f in files:
         problems = lt.validate_file(f)
         rel = lt.relpath(f)
@@ -50,10 +79,9 @@ def main(argv: list[str] | None = None) -> int:
             line = f"{rel} {problem.pointer}: {problem.message}"
             print(f"FAIL  {line}", file=sys.stderr)
             if args.annotate:
-                # GitHub's ::error annotation is one line: fold embedded
-                # newlines (e.g. a multi-line PyYAML parse error) into "  ".
-                flat_message = problem.message.replace("\r\n", " ").replace("\n", "  ")
-                print(f"::error file={rel}::{problem.pointer}: {flat_message}")
+                file_prop = _escape_annotation_property(rel)
+                data = _escape_annotation_data(f"{problem.pointer}: {problem.message}")
+                print(f"::error file={file_prop}::{data}")
 
     if all_ok:
         print(f"{len(files)} template(s) valid")

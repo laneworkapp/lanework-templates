@@ -1,24 +1,27 @@
 name: Update index.json
 
-# Runs only after a merge lands on main — never on a PR, so it's the one
-# workflow trusted with write access. Two independent guards against a
-# commit loop: the trigger ignores changes to index.json itself (the only
-# file this job ever touches), and the job also skips its own commit when
-# regeneration produces no diff. (Belt and suspenders: pushes made with the
-# default GITHUB_TOKEN don't retrigger workflows in the first place, but
-# this workflow doesn't rely on that alone.)
+# Runs after every push to main — never on a PR, so it's the one workflow
+# trusted with write access. Guarded against a commit loop two ways: the
+# commit message carries "[skip ci]", and the job skips its own commit
+# outright when regeneration produces no diff. (A push made with the
+# default GITHUB_TOKEN doesn't retrigger a workflow in the first place,
+# but this workflow doesn't rely on that alone.) `concurrency` serializes
+# runs so two merges in quick succession can't race to push index.json.
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "index.json"
 
 permissions:
   contents: write
 
+concurrency:
+  group: index-json
+  cancel-in-progress: true
+
 jobs:
   index:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
