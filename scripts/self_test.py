@@ -180,11 +180,42 @@ def check_directory_rules() -> list[str]:
     return failures
 
 
+def check_size_cap_and_encoding() -> list[str]:
+    """N5 (size cap) and N6 (explicit UTF-8) — generated at test time rather
+    than committed as fixtures, so a 64 KiB-plus file and a non-UTF-8 byte
+    string don't have to live in the repo."""
+    failures: list[str] = []
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = pathlib.Path(tmp)
+
+        big = tmp_path / "big.lanework-template"
+        big.write_text("schema: 1\ntitle: " + ("x" * (lt.MAX_DESCRIPTOR_BYTES + 100)) + "\n", encoding="utf-8")
+        problems = lt.validate_file(big)
+        messages = " | ".join(p.message for p in problems)
+        if not problems or "KiB" not in messages:
+            failures.append(f"oversized descriptor: expected a size-limit message, got: {messages or '(none)'}")
+        else:
+            print(f"PASS  a {big.stat().st_size:,}-byte descriptor is refused: {messages}")
+
+        bad_utf8 = tmp_path / "bad-utf8.lanework-template"
+        bad_utf8.write_bytes(b"schema: 1\ntitle: \xff\xfe not utf-8\n")
+        problems = lt.validate_file(bad_utf8)
+        messages = " | ".join(p.message for p in problems)
+        if not problems or "UTF-8" not in messages:
+            failures.append(f"non-UTF-8 descriptor: expected a readable UTF-8 message, got: {messages or '(none)'}")
+        else:
+            print(f"PASS  a non-UTF-8 descriptor gets a readable message, not a traceback: {messages}")
+
+    return failures
+
+
 def main() -> int:
     failures: list[str] = []
     failures += check_seeds_and_fixtures()
     failures += check_build_index_normalization()
     failures += check_directory_rules()
+    failures += check_size_cap_and_encoding()
 
     if failures:
         print("\nFAILURES:", file=sys.stderr)
