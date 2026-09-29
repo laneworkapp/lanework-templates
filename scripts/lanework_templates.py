@@ -8,8 +8,13 @@ like — see CONTRIBUTING.md.
 Validation is JSON Schema 2020-12 against the vendored copy of the real
 Lanework descriptor schema in `schema/1/` (see `schema/1/SOURCE.md`), using
 `jsonschema` + `referencing` so `required`, `const` and `$ref` all work the
-way the schema authors intended. YAML is parsed with `yaml.safe_load` only:
-a descriptor's content is data, never executed.
+way the schema authors intended. YAML is parsed with a `SafeLoader` subclass
+only: a descriptor's content is data, never executed, and never a new tag.
+
+A few rules the vendored schema can't express on its own (a JSON Schema
+can't refuse a *repeated* mapping key, or fix a regex engine's `$`) live
+here instead, as plain Python checks that never touch `schema/1/` — see
+`_repo_side_problems` and `check_templates_directory`.
 """
 from __future__ import annotations
 
@@ -17,6 +22,8 @@ import dataclasses
 import json
 import os
 import pathlib
+import re
+import reprlib
 from typing import Any
 
 import yaml
@@ -29,6 +36,33 @@ TEMPLATES_DIR = REPO_ROOT / "templates"
 
 _SCHEMA_FILES = ("common.json", "board.json", "lane.json", "card.json", "template.json")
 _TEMPLATE_SCHEMA_NAME = "template.json"
+
+# A file bigger than this has no legitimate reason to be a board template,
+# and it bounds how much text a pathological descriptor can make us parse
+# and re-print in a message. State in CONTRIBUTING.md.
+MAX_DESCRIPTOR_BYTES = 64 * 1024
+
+# Any message we build, and any value we echo into one, is capped — a
+# deeply alias-nested YAML value can otherwise make a single `repr()` run
+# to hundreds of megabytes (measured: a 504-byte file, 155 MB to stderr).
+_MESSAGE_LIMIT = 200
+
+_bounded_repr = reprlib.Repr()
+_bounded_repr.maxlevel = 3
+_bounded_repr.maxlist = 5
+_bounded_repr.maxdict = 5
+_bounded_repr.maxtuple = 5
+_bounded_repr.maxset = 5
+_bounded_repr.maxfrozenset = 5
+_bounded_repr.maxstring = 80
+_bounded_repr.maxlong = 40
+_bounded_repr.maxother = 80
+
+_SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*\.lanework-template$")
+_ALLOWED_EXTRA_FILES = {"README.md"}
+
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
+_TRAILING_WS_RE = re.compile(r"[ \t\r\n\x0b\x0c]+\Z")
 
 
 @dataclasses.dataclass
@@ -51,8 +85,23 @@ def relpath(path: pathlib.Path) -> str:
         return str(path)
 
 
+def _safe_repr(value: Any) -> str:
+    """A `repr()` that can't be made to blow up by a deeply alias-nested
+    YAML value: bounded depth, bounded element counts, bounded length."""
+    try:
+        return _bounded_repr.repr(value)
+    except Exception:
+        return "<unrepresentable value>"
+
+
+def _truncate(text: str, limit: int = _MESSAGE_LIMIT) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + "…"
+
+
 def load_schema(name: str) -> dict:
-    return json.loads((SCHEMA_DIR / name).read_text())
+    return json.loads((SCHEMA_DIR / name).read_text(encoding="utf-8"))
 
 
 _validator_cache: Draft202012Validator | None = None
@@ -82,13 +131,115 @@ def get_validator() -> Draft202012Validator:
     return _validator_cache
 
 
+# ---------------------------------------------------------------------------
+# YAML loading: safe, UTF-8 explicit, no duplicate mapping keys.
+# ---------------------------------------------------------------------------
+
+
+class _DuplicateKeyError(Exception):
+    """A mapping in the document repeats a key. Carries the key and a
+    JSON-pointer-shaped path to where it happened."""
+
+    def __init__(self, key: Any, pointer: str) -> None:
+        self.key = key
+        self.pointer = pointer
+        super().__init__(f"duplicate key {key!r} at {pointer}")
+
+
+class _StrictSafeLoader(yaml.SafeLoader):
+    """A `SafeLoader` that refuses a mapping key repeated at any depth.
+
+    PyYAML's ordinary behaviour silently keeps the last of any duplicate key
+    (`title: a` then `title: b` in the same mapping just becomes `title:
+    b`) — the app's own Yams-based reader refuses this outright. This
+    subclass only changes how mapping and sequence NODES become Python
+    dicts/lists (still no new tags, still nothing executed, still every
+    scalar handled exactly as SafeLoader's own resolvers do); it doesn't
+    support YAML's `<<:` merge-key shorthand, which is fine — a descriptor
+    has no legitimate use for it.
+    """
+
+
+def _construct_mapping_no_dupes(loader: _StrictSafeLoader, node: yaml.Node) -> dict:
+    path: list = getattr(loader, "_lt_path", [])
+    mapping: dict = {}
+    seen: set = set()
+    for key_node, value_node in node.value:
+        key = loader.construct_object(key_node, deep=True)
+        try:
+            hash(key)
+            dedup_key: Any = key
+        except TypeError:
+            dedup_key = repr(key)
+        if dedup_key in seen:
+            pointer = "/" + "/".join(str(part) for part in (*path, key))
+            raise _DuplicateKeyError(key, pointer)
+        seen.add(dedup_key)
+        path.append(key)
+        loader._lt_path = path
+        try:
+            value = loader.construct_object(value_node, deep=True)
+        finally:
+            path.pop()
+            loader._lt_path = path
+        mapping[key] = value
+    return mapping
+
+
+def _construct_sequence_with_path(loader: _StrictSafeLoader, node: yaml.Node) -> list:
+    path: list = getattr(loader, "_lt_path", [])
+    result: list = []
+    for index, child in enumerate(node.value):
+        path.append(index)
+        loader._lt_path = path
+        try:
+            result.append(loader.construct_object(child, deep=True))
+        finally:
+            path.pop()
+            loader._lt_path = path
+    return result
+
+
+_StrictSafeLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
+    _construct_mapping_no_dupes,
+)
+_StrictSafeLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_SEQUENCE_TAG,
+    _construct_sequence_with_path,
+)
+
+
 def parse_yaml(path: pathlib.Path) -> tuple[Any, str | None]:
-    """Parse a descriptor's YAML. Never executes anything — safe_load only."""
-    text = path.read_text()
+    """Parse a descriptor's YAML. Returns `(data, None)` or `(None, message)`
+    with a message already readable — never a raw traceback for a file
+    that's merely too big, not UTF-8, has a duplicate key, or is too deeply
+    nested."""
     try:
-        data = yaml.safe_load(text)
+        size = path.stat().st_size
+    except OSError as exc:
+        return None, f"could not read this file: {exc}"
+
+    if size > MAX_DESCRIPTOR_BYTES:
+        return None, (
+            f"descriptor is {size:,} bytes, over the {MAX_DESCRIPTOR_BYTES // 1024} KiB "
+            "limit (see CONTRIBUTING.md)"
+        )
+
+    raw = path.read_bytes()
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        return None, f"not valid UTF-8: {exc}"
+
+    try:
+        data = yaml.load(text, Loader=_StrictSafeLoader)
+    except _DuplicateKeyError as exc:
+        return None, f"duplicate key {exc.key!r} at {exc.pointer}: a mapping may not repeat a key"
+    except RecursionError:
+        return None, "descriptor is too deeply nested to parse"
     except yaml.YAMLError as exc:
-        return None, str(exc)
+        return None, f"invalid YAML: {_truncate(str(exc))}"
     return data, None
 
 
@@ -103,6 +254,75 @@ def collect_files(paths: list[str]) -> list[pathlib.Path]:
         else:
             raise SystemExit(f"error: {raw} not found")
     return files
+
+
+def find_case_collisions(names: list[str]) -> dict[str, str]:
+    """Maps each name (in the order given) that repeats an earlier one,
+    case-insensitively, to the first name it collides with. A pure string
+    function — kept separate from `check_templates_directory` because two
+    case-differing files can't both exist to test this against on a
+    case-insensitive filesystem (APFS), which is exactly the risk (Q21:
+    the slug keys the cache and accessibility ids; CI runs on Linux, where
+    both files really can coexist and silently shadow one another)."""
+    seen: dict[str, str] = {}
+    collisions: dict[str, str] = {}
+    for name in names:
+        key = name.lower()
+        if key in seen:
+            collisions[name] = seen[key]
+        else:
+            seen[key] = name
+    return collisions
+
+
+def check_templates_directory(dir_path: pathlib.Path) -> list[Problem]:
+    """Directory-level rules a single descriptor can't see on its own: the
+    slug grammar, case-insensitive slug uniqueness, regular files only (no
+    symlinks), and nothing in `templates/` besides `*.lanework-template`
+    and an optional `README.md`."""
+    problems: list[Problem] = []
+    entries = sorted(dir_path.iterdir(), key=lambda p: p.name)
+    valid_names: list[str] = []
+    valid_entries: dict[str, pathlib.Path] = {}
+
+    for entry in entries:
+        name = entry.name
+        if entry.is_symlink():
+            problems.append(
+                Problem(pointer="/", message="is a symlink: templates/ may hold only regular files", file=entry)
+            )
+            continue
+        if name in _ALLOWED_EXTRA_FILES:
+            continue
+        if not entry.is_file():
+            problems.append(
+                Problem(
+                    pointer="/",
+                    message="is not a regular file: templates/ may hold only *.lanework-template files (and an optional README.md)",
+                    file=entry,
+                )
+            )
+            continue
+        if not _SLUG_RE.match(name):
+            problems.append(
+                Problem(
+                    pointer="/",
+                    message=(
+                        "doesn't match the slug grammar ^[a-z0-9]+(-[a-z0-9]+)*\\.lanework-template$ "
+                        "(and isn't README.md) — templates/ may hold only *.lanework-template files"
+                    ),
+                    file=entry,
+                )
+            )
+            continue
+        valid_names.append(name)
+        valid_entries[name] = entry
+
+    for name, first in find_case_collisions(valid_names).items():
+        problems.append(
+            Problem(pointer="/", message=f"collides case-insensitively with {first}", file=valid_entries[name])
+        )
+    return problems
 
 
 def _pointer(path: tuple) -> str:
@@ -147,15 +367,53 @@ def _readable_message(error, path: tuple) -> str:
         return _forbidden_message(key, path)
 
     if error.validator == "pattern" and key == "url" and "author" in path:
-        return f"author url must be a GitHub profile (https://github.com/<user>) — got {error.instance!r}"
+        return f"author url must be a GitHub profile (https://github.com/<user>) — got {_safe_repr(error.instance)}"
 
     if key == "schema" and error.validator in ("type", "anyOf"):
-        return f"`schema` must be an integer (e.g. `schema: 1`), got {error.instance!r}"
+        return f"`schema` must be an integer (e.g. `schema: 1`), got {_safe_repr(error.instance)}"
 
     if key == "title" and error.validator in ("anyOf", "type"):
         return "title must be plain text on a single line (a string, number or boolean — not a mapping or list)"
 
     return error.message
+
+
+# ---------------------------------------------------------------------------
+# Repo-side rules the vendored schema (byte-identical to its source, never
+# hand-edited) can't express.
+# ---------------------------------------------------------------------------
+
+
+def _check_repo_side_text(value: Any, pointer: str) -> list[Problem]:
+    if not isinstance(value, str):
+        return []
+    problems: list[Problem] = []
+    core = _TRAILING_WS_RE.sub("", value)
+    if core != value:
+        problems.append(Problem(pointer=pointer, message="must not end in whitespace or a newline"))
+    if _CONTROL_CHAR_RE.search(core):
+        problems.append(Problem(pointer=pointer, message="must not contain control characters"))
+    return problems
+
+
+def _repo_side_problems(data: Any) -> list[Problem]:
+    """`schema/1/common.json`'s author-url pattern is anchored with `$`,
+    which Python's `re` (unlike ECMA-262) matches just before a trailing
+    newline — so a url ending in `\\n` passes the vendored schema. Checked
+    here instead of by editing schema/1/, which stays byte-identical to its
+    source."""
+    problems: list[Problem] = []
+    if not isinstance(data, dict):
+        return problems
+    template_meta = data.get("template")
+    if isinstance(template_meta, dict):
+        author = template_meta.get("author")
+        if isinstance(author, dict):
+            if "url" in author:
+                problems.extend(_check_repo_side_text(author["url"], "/template/author/url"))
+            if "name" in author:
+                problems.extend(_check_repo_side_text(author["name"], "/template/author/name"))
+    return problems
 
 
 def validate_data(data: Any) -> list[Problem]:
@@ -176,19 +434,63 @@ def validate_data(data: Any) -> list[Problem]:
         chosen = not_errors if not_errors else errors
         seen_messages = set()
         for error in chosen:
-            message = _readable_message(error, path)
+            message = _truncate(_readable_message(error, path))
             if message in seen_messages:
                 continue
             seen_messages.add(message)
             problems.append(Problem(pointer=_pointer(path), message=message))
+
+    problems.extend(_repo_side_problems(data))
     return problems
 
 
 def validate_file(path: pathlib.Path) -> list[Problem]:
-    data, yaml_error = parse_yaml(path)
-    if yaml_error is not None:
-        return [Problem(pointer="/", message=f"invalid YAML: {yaml_error}", file=path)]
+    data, error = parse_yaml(path)
+    if error is not None:
+        return [Problem(pointer="/", message=_truncate(error), file=path)]
     problems = validate_data(data)
     for problem in problems:
         problem.file = path
     return problems
+
+
+# ---------------------------------------------------------------------------
+# The app's own "lenient" readings — used by build_index.py to normalise a
+# schema-valid but loosely-typed value (a quoted order, a numeric title)
+# before it reaches index.json.
+# ---------------------------------------------------------------------------
+
+
+def read_lenient_integer(value: Any) -> int | None:
+    """`common.json#/$defs/lenient-integer`'s own reading: an integer, a
+    whole-number double, or a numeric string. A fractional value, or
+    anything else, has no reading — returns `None` rather than raising, so
+    the caller can omit the field the way the app itself would."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value) if value.is_integer() else None
+    if isinstance(value, str):
+        text = value.strip()
+        try:
+            return int(text)
+        except ValueError:
+            pass
+        try:
+            as_float = float(text)
+        except ValueError:
+            return None
+        return int(as_float) if as_float.is_integer() else None
+    return None
+
+
+def read_lenient_text(value: Any) -> str | None:
+    """`common.json#/$defs/lenient-text`'s own reading: any scalar reads as
+    the text the author typed."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float, str)):
+        return str(value)
+    return None

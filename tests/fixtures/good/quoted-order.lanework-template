@@ -1,0 +1,5 @@
+schema: 1
+title: Quoted Order
+template: {order: "100", author: {name: Test, url: "https://github.com/test"}}
+lanes:
+  - title: To Do

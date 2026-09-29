@@ -1,0 +1,5 @@
+schema: 1
+title: Trailing Newline Author Url
+template: {order: 1, author: {name: A, url: "https://github.com/a\n"}}
+lanes:
+  - title: To Do
