@@ -24,6 +24,7 @@ import os
 import pathlib
 import re
 import reprlib
+import subprocess
 from typing import Any
 
 import yaml
@@ -146,8 +147,22 @@ class _DuplicateKeyError(Exception):
         super().__init__(f"duplicate key {key!r} at {pointer}")
 
 
+class _AnchorError(Exception):
+    """The document uses a YAML anchor (`&name`) or alias (`*name`)."""
+
+    def __init__(self, token: str, line: int) -> None:
+        self.token = token
+        self.line = line
+        super().__init__(f"{token} at line {line}")
+
+
 class _StrictSafeLoader(yaml.SafeLoader):
-    """A `SafeLoader` that refuses a mapping key repeated at any depth.
+    """A `SafeLoader` that refuses a mapping key repeated at any depth, and
+    any anchor or alias.
+
+    Anchors and aliases are refused while the node graph is composed, before
+    anything is expanded: a descriptor has no use for them, and a consumer
+    that expands aliases can be made to hang on a few KiB of nesting.
 
     PyYAML's ordinary behaviour silently keeps the last of any duplicate key
     (`title: a` then `title: b` in the same mapping just becomes `title:
@@ -158,6 +173,15 @@ class _StrictSafeLoader(yaml.SafeLoader):
     support YAML's `<<:` merge-key shorthand, which is fine — a descriptor
     has no legitimate use for it.
     """
+
+    def compose_node(self, parent, index):  # noqa: D401 - PyYAML hook
+        if self.check_event(yaml.AliasEvent):
+            event = self.peek_event()
+            raise _AnchorError(f"alias `*{event.anchor}`", event.start_mark.line + 1)
+        event = self.peek_event()
+        if getattr(event, "anchor", None) is not None:
+            raise _AnchorError(f"anchor `&{event.anchor}`", event.start_mark.line + 1)
+        return super().compose_node(parent, index)
 
 
 def _construct_mapping_no_dupes(loader: _StrictSafeLoader, node: yaml.Node) -> dict:
@@ -236,6 +260,11 @@ def parse_yaml(path: pathlib.Path) -> tuple[Any, str | None]:
         data = yaml.load(text, Loader=_StrictSafeLoader)
     except _DuplicateKeyError as exc:
         return None, f"duplicate key {exc.key!r} at {exc.pointer}: a mapping may not repeat a key"
+    except _AnchorError as exc:
+        return None, (
+            f"YAML anchors and aliases (`&name`, `*name`) are not allowed: found {exc.token} "
+            f"at line {exc.line} — write the value out in full"
+        )
     except RecursionError:
         return None, "descriptor is too deeply nested to parse"
     except yaml.YAMLError as exc:
@@ -243,12 +272,43 @@ def parse_yaml(path: pathlib.Path) -> tuple[Any, str | None]:
     return data, None
 
 
+def list_directory_entries(dir_path: pathlib.Path) -> list[pathlib.Path]:
+    """What lint looks at in `dir_path`: the entries git tracks there, so a
+    Finder `.DS_Store` or an editor swap file beside the seeds can't turn a
+    local run red while CI, from a clean checkout, stays green. Falls back to
+    every entry in the directory outside a git repo, when git is missing, or
+    when git tracks nothing there yet (a brand-new directory, or a scratch
+    copy) — there is nothing to filter by. A tracked entry that isn't on disk
+    is dropped (it's a pending deletion); a tracked subdirectory's files
+    surface as the subdirectory itself, which the directory rules refuse.
+    Note a new template must be `git add`ed before local lint sees it."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(dir_path), "ls-files", "-z", "--", "."],
+            capture_output=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return sorted(dir_path.iterdir(), key=lambda p: p.name)
+
+    names = {raw.split(b"/", 1)[0].decode("utf-8", "surrogateescape") for raw in result.stdout.split(b"\0") if raw}
+    if not names:
+        return sorted(dir_path.iterdir(), key=lambda p: p.name)
+    entries = [dir_path / name for name in names if (dir_path / name).is_symlink() or (dir_path / name).exists()]
+    return sorted(entries, key=lambda p: p.name)
+
+
+def list_templates(dir_path: pathlib.Path) -> list[pathlib.Path]:
+    """The `*.lanework-template` files lint and the indexer read from a directory."""
+    return [e for e in list_directory_entries(dir_path) if e.name.endswith(".lanework-template")]
+
+
 def collect_files(paths: list[str]) -> list[pathlib.Path]:
     files: list[pathlib.Path] = []
     for raw in paths:
         p = pathlib.Path(raw)
         if p.is_dir():
-            files.extend(sorted(p.glob("*.lanework-template")))
+            files.extend(list_templates(p))
         elif p.is_file():
             files.append(p)
         else:
@@ -258,12 +318,18 @@ def collect_files(paths: list[str]) -> list[pathlib.Path]:
 
 def find_case_collisions(names: list[str]) -> dict[str, str]:
     """Maps each name (in the order given) that repeats an earlier one,
-    case-insensitively, to the first name it collides with. A pure string
-    function — kept separate from `check_templates_directory` because two
-    case-differing files can't both exist to test this against on a
-    case-insensitive filesystem (APFS), which is exactly the risk (Q21:
-    the slug keys the cache and accessibility ids; CI runs on Linux, where
-    both files really can coexist and silently shadow one another)."""
+    case-insensitively, to the first name it collides with.
+
+    Defence in depth, not a rule that can fire on its own: the slug grammar
+    (`^[a-z0-9]+(-[a-z0-9]+)*\\.lanework-template$`) is lowercase-only, so
+    two names that both pass it can never differ only by case, and
+    `check_templates_directory` only feeds it grammar-valid names. It stays
+    a pure string function so it can be tested directly (two case-differing
+    files can't coexist on a case-insensitive filesystem, APFS) and so
+    `build_index` can re-check the slugs it derived (Q21: the slug keys the
+    cache and accessibility ids; CI runs on Linux, where both files really
+    could coexist and silently shadow one another if the grammar ever
+    loosened)."""
     seen: dict[str, str] = {}
     collisions: dict[str, str] = {}
     for name in names:
@@ -279,9 +345,10 @@ def check_templates_directory(dir_path: pathlib.Path) -> list[Problem]:
     """Directory-level rules a single descriptor can't see on its own: the
     slug grammar, case-insensitive slug uniqueness, regular files only (no
     symlinks), and nothing in `templates/` besides `*.lanework-template`
-    and an optional `README.md`."""
+    and an optional `README.md`. Only what git tracks there is checked (see
+    `list_directory_entries`)."""
     problems: list[Problem] = []
-    entries = sorted(dir_path.iterdir(), key=lambda p: p.name)
+    entries = list_directory_entries(dir_path)
     valid_names: list[str] = []
     valid_entries: dict[str, pathlib.Path] = {}
 
@@ -461,28 +528,33 @@ def validate_file(path: pathlib.Path) -> list[Problem]:
 # ---------------------------------------------------------------------------
 
 
+_INT64_MIN = -(2**63)
+_INT64_MAX = 2**63 - 1
+_ASCII_INTEGER_RE = re.compile(r"[+-]?[0-9]+")
+
+
+def _int64(value: int) -> int | None:
+    return value if _INT64_MIN <= value <= _INT64_MAX else None
+
+
 def read_lenient_integer(value: Any) -> int | None:
-    """`common.json#/$defs/lenient-integer`'s own reading: an integer, a
-    whole-number double, or a numeric string. A fractional value, or
-    anything else, has no reading — returns `None` rather than raising, so
-    the caller can omit the field the way the app itself would."""
+    """`common.json#/$defs/lenient-integer`'s own reading, bounded the way a
+    Swift client decoding `Int` is: an integer, a whole-number double, or a
+    string of ASCII digits with an optional sign (`[+-]?[0-9]+`, no padding,
+    no exponent, no underscores, no non-ASCII digits), and only within
+    Int64. A fractional or out-of-range value, or anything else, has no
+    reading — returns `None` rather than raising, so the caller can omit the
+    field the way the app itself would."""
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
-        return value
+        return _int64(value)
     if isinstance(value, float):
-        return int(value) if value.is_integer() else None
+        return _int64(int(value)) if value.is_integer() else None
     if isinstance(value, str):
-        text = value.strip()
-        try:
-            return int(text)
-        except ValueError:
-            pass
-        try:
-            as_float = float(text)
-        except ValueError:
+        if _ASCII_INTEGER_RE.fullmatch(value) is None:
             return None
-        return int(as_float) if as_float.is_integer() else None
+        return _int64(int(value))
     return None
 
 

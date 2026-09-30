@@ -8,7 +8,9 @@ edge-case fixtures under `tests/fixtures/good/` stay green; build_index.py
 normalises a schema-valid-but-loosely-typed value (a quoted order, a
 numeric title) instead of crashing or emitting it raw; and the
 directory-level rules (slug grammar, case-unique, no symlinks or stray
-files) fire on a synthetic bad directory and stay quiet on the real one.
+files) fire on a synthetic bad directory and stay quiet on the real one;
+an alias descriptor is refused, `order` is bounded to Int64 and ASCII digits,
+and an untracked `.DS_Store` leaves `lint.sh` and CI's check green.
 
 Run this after touching scripts/lanework_templates.py, scripts/build_index.py
 or schema/1/ (e.g. after scripts/sync-schema.sh) to catch a rule silently

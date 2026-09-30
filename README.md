@@ -10,6 +10,7 @@ Board templates for [Lanework](https://github.com/laneworkapp), the Mac kanban a
 - The app writes every byte of a new board itself. A template carries no attachments, comments or other files.
 - Every PR is checked by CI against a vendored copy of the real descriptor schema (`schema/1/`, see `schema/1/SOURCE.md`) — the same check `scripts/lint.sh` runs locally — with a readable message naming the file, the failing value and the rule broken.
 - A merge to `main` regenerates `index.json` and commits it automatically; nothing hand-maintains it. Shape: `{"version": 1, "templates": [...]}`, one entry per template with `slug`, `path`, `schema`, `title`, plus `order`/`author` when the descriptor sets them — normalised to the app's own reading (a quoted `"100"` and `100` both index as `100`) and documented in `CONTRIBUTING.md`.
+- Descriptors are parsed as plain data: YAML anchors and aliases are refused, and `order` reads only as a 64-bit integer (anything else is omitted from the index). Local lint checks only git-tracked files, like CI's clean checkout.
 - File names are CI-enforced: `^[a-z0-9]+(-[a-z0-9]+)*\.lanework-template$`, unique case-insensitively, no symlinks or stray files in `templates/`.
 - `CONTRIBUTING.md` covers the format, the lint script, the GitHub-profile-only author link rule, and what review looks for.
 

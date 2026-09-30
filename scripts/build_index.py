@@ -101,7 +101,7 @@ def build(templates_dir: pathlib.Path) -> list[dict]:
         lines = "\n".join(f"  {lt.relpath(p.file)}: {p.message}" for p in dir_problems)
         raise SystemExit(f"error: {templates_dir} fails its directory rules, refusing to index it:\n{lines}")
 
-    files = sorted(templates_dir.glob("*.lanework-template"))
+    files = lt.list_templates(templates_dir)
     entries = [entry_for(f) for f in files]
 
     collisions = lt.find_case_collisions([e["slug"] for e in entries])
