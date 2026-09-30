@@ -1,0 +1,6 @@
+schema: 1
+title: Alias
+x-base: &base {a: 1}
+x-copy: *base
+lanes:
+  - title: To Do

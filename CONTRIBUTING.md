@@ -78,10 +78,13 @@ The chooser's own metadata, read by the app (not carried onto the board it
 builds):
 
 - `order` — the template's position in the chooser. Accepted loosely
-  (an integer, a whole-number double, or a numeric string — `100`, `100.0`
-  and `"100"` all read as `100`), but normalised to a plain integer before
-  it reaches `index.json`. A fractional value (`1.5`) has no reading and
-  is omitted from the index rather than causing an error.
+  (an integer, a whole-number double, or a string of ASCII digits with an
+  optional sign — `100`, `100.0` and `"100"` all read as `100`), but
+  normalised to a plain integer before it reaches `index.json`. Anything
+  else has no reading and is omitted from the index rather than causing an
+  error: a fractional value (`1.5`), a value outside the 64-bit signed
+  range, a padded string (`" 100 "`), an exponent (`"1e20"`) or non-ASCII
+  digits.
 - `author: {name, url}` — shown on the template's Gallery row and in the
   chooser's footer. **`url` must be a GitHub profile link**,
   `https://github.com/<user>`, with no control characters and no trailing
@@ -89,6 +92,13 @@ builds):
   chooser opens it and shows the GitHub handle beside your name. `name`
   also may not end in whitespace or contain a control character. Both CI
   and the lint script reject anything else.
+
+### No anchors or aliases
+
+YAML anchors and aliases (`&name`, `*name`, and the `<<:` merge that uses
+them) are refused, with the line they appear on: a descriptor has no use
+for them, and a reader that expands them can be made to hang on a few KiB
+of nesting. Write the value out in full.
 
 ### Size
 
@@ -139,6 +149,10 @@ scripts/lint.sh
 
 This runs the exact same check as CI (`scripts/validate_templates.py`, the
 one validator both call), so a green `lint.sh` means a green PR check. It
+checks the files git tracks under `templates/` (as CI's clean checkout
+does), so a stray `.DS_Store` doesn't turn it red, but a new template must
+be `git add`ed before it is linted. Outside a git repo it checks the whole
+directory. It
 prints the file, the JSON pointer of the failing value and the rule broken
 for anything red, e.g.:
 

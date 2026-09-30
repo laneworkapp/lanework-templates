@@ -8,7 +8,9 @@ edge-case fixtures under `tests/fixtures/good/` stay green; build_index.py
 normalises a schema-valid-but-loosely-typed value (a quoted order, a
 numeric title) instead of crashing or emitting it raw; and the
 directory-level rules (slug grammar, case-unique, no symlinks or stray
-files) fire on a synthetic bad directory and stay quiet on the real one.
+files) fire on a synthetic bad directory and stay quiet on the real one;
+an alias descriptor is refused, `order` is bounded to Int64 and ASCII digits,
+and an untracked `.DS_Store` leaves `lint.sh` and CI's check green.
 
 Run this after touching scripts/lanework_templates.py, scripts/build_index.py
 or schema/1/ (e.g. after scripts/sync-schema.sh) to catch a rule silently
@@ -16,7 +18,9 @@ going soft.
 
     python3 scripts/self_test.py
 """
+import os
 import shutil
+import subprocess
 import sys
 import pathlib
 import tempfile
@@ -38,6 +42,7 @@ EXPECTED_BAD = {
     "bad-yaml.lanework-template": "invalid YAML",
     "duplicate-key.lanework-template": "duplicate key",
     "trailing-newline-author-url.lanework-template": "must not end in whitespace or a newline",
+    "alias.lanework-template": "anchors and aliases",
 }
 
 # good (schema-valid) edge-case fixtures that must validate clean.
@@ -45,13 +50,20 @@ GOOD_EDGE_CASES = (
     "quoted-order.lanework-template",
     "numeric-title.lanework-template",
     "fractional-order.lanework-template",
+    "out-of-range-order.lanework-template",
+    "padded-order.lanework-template",
+    "huge-digit-order.lanework-template",
 )
+
+# Good fixtures whose `template.order` has no reading: schema-valid, but
+# omitted from index.json rather than emitted raw.
+OMITTED_ORDER = ("fractional-order", "out-of-range-order", "padded-order", "huge-digit-order")
 
 
 def check_seeds_and_fixtures() -> list[str]:
     failures: list[str] = []
 
-    for f in sorted(lt.TEMPLATES_DIR.glob("*.lanework-template")):
+    for f in lt.list_templates(lt.TEMPLATES_DIR):
         problems = lt.validate_file(f)
         if problems:
             failures.append(f"templates/{f.name}: expected valid, got {[p.message for p in problems]}")
@@ -96,15 +108,15 @@ def check_build_index_normalization() -> list[str]:
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = pathlib.Path(tmp)
-        for f in lt.TEMPLATES_DIR.glob("*.lanework-template"):
+        for f in lt.list_templates(lt.TEMPLATES_DIR):
             shutil.copy(f, tmp_path / f.name)
         for name in GOOD_EDGE_CASES:
             shutil.copy(GOOD_FIXTURES_DIR / name, tmp_path / name)
 
         try:
             entries = bi.build(tmp_path)
-        except TypeError as exc:
-            failures.append(f"build_index.build() crashed on mixed lenient order/title values: {exc}")
+        except Exception as exc:
+            failures.append(f"build_index.build() crashed on mixed lenient order/title values: {type(exc).__name__}: {exc}")
             return failures
 
     by_slug = {e["slug"]: e for e in entries}
@@ -123,16 +135,184 @@ def check_build_index_normalization() -> list[str]:
     else:
         print("PASS  build_index normalises title: 1984 (int) -> \"1984\" (str), no order key")
 
-    fractional = by_slug.get("fractional-order")
-    if fractional is not None and "order" in fractional:
-        failures.append(f"fractional-order: expected order omitted (fractional, unreadable), got {fractional.get('order')!r}")
-    else:
-        print("PASS  build_index omits a fractional order (1.5) rather than emitting it raw")
+    for slug in OMITTED_ORDER:
+        entry = by_slug.get(slug)
+        if entry is None:
+            failures.append(f"{slug}: missing from the built index")
+        elif "order" in entry:
+            failures.append(f"{slug}: expected order omitted (no reading), got {entry.get('order')!r}")
+        else:
+            print(f"PASS  build_index omits the unreadable order of {slug} rather than emitting it raw")
 
     for entry in entries:
         if not isinstance(entry["schema"], int):
             failures.append(f"{entry['slug']}: expected schema as int, got {entry['schema']!r}")
 
+    return failures
+
+
+def check_lenient_integer() -> list[str]:
+    """`order` is bounded to Int64 and ASCII digits: only `[+-]?[0-9]+` or a
+    whole-number double reads; anything else has no reading (`None`)."""
+    failures: list[str] = []
+    int64_max, int64_min = 2**63 - 1, -(2**63)
+    cases = [
+        (100, 100),
+        ("100", 100),
+        ("+100", 100),
+        ("-100", -100),
+        (100.0, 100),
+        (int64_max, int64_max),
+        (str(int64_max), int64_max),
+        (int64_min, int64_min),
+        (str(int64_min), int64_min),
+        ("9" * 5000, None),  # past Python's 4300-digit int() limit: must not raise
+        ("-" + "9" * 5000, None),
+        ("0" * 5000 + "1", 1),  # leading zeros don't count toward the bound
+        ("9" * 19, None),
+        (int64_max + 1, None),
+        (str(int64_max + 1), None),
+        (int64_min - 1, None),
+        (99999999999999999999, None),
+        ("99999999999999999999", None),
+        (1e20, None),
+        (2.0**63, None),
+        ("1e20", None),
+        (" 100 ", None),
+        ("100\n", None),
+        ("", None),
+        ("+", None),
+        ("١٢٣", None),  # Arabic-Indic digits: int() would read them, the app can't
+        ("１２３", None),  # full-width digits
+        ("1_000", None),
+        (1.5, None),
+        (float("inf"), None),
+        (float("nan"), None),
+        (True, None),
+        (None, None),
+    ]
+    bad = []
+    for v, want in cases:
+        try:
+            got = lt.read_lenient_integer(v)
+        except Exception as exc:  # a crash here is what takes the index job down
+            got = f"raised {type(exc).__name__}: {exc}"
+        if got != want:
+            bad.append((v if not isinstance(v, str) or len(v) < 40 else v[:12] + f"...({len(v)} chars)", want, got))
+    for value, want, got in bad:
+        failures.append(f"read_lenient_integer({value!r}): expected {want!r}, got {got!r}")
+    if not bad:
+        print(f"PASS  read_lenient_integer reads {len(cases)} boundary/padded/non-ASCII cases as specified")
+    return failures
+
+
+def check_aliases() -> list[str]:
+    """A descriptor has no use for YAML anchors or aliases; a consumer that
+    expands them can be made to hang (31 nested levels in 1.8 KB). Refused at
+    parse time, before any expansion, with a message that names the token."""
+    failures: list[str] = []
+    with tempfile.TemporaryDirectory() as tmp:
+        bomb = pathlib.Path(tmp) / "bomb.lanework-template"
+        lines = ["schema: 1", "title: Bomb", "x0: &a0 [z, z, z]"]
+        for i in range(1, 31):
+            lines.append(f"x{i}: &a{i} [" + ", ".join(f"*a{i - 1}" for _ in range(3)) + "]")
+        bomb.write_text("\n".join(lines) + "\nlanes:\n  - title: To Do\n", encoding="utf-8")
+        problems = lt.validate_file(bomb)
+        messages = " | ".join(p.message for p in problems)
+        if not problems or "anchors and aliases" not in messages:
+            failures.append(f"alias bomb: expected an anchors-and-aliases message, got: {messages or '(none)'}")
+        elif len(messages) > 400:
+            failures.append(f"alias bomb: message is {len(messages)} chars, expected a short one")
+        else:
+            print(f"PASS  a nested-alias descriptor is refused at parse time: {messages}")
+
+        anchor_only = pathlib.Path(tmp) / "anchor.lanework-template"
+        anchor_only.write_text("schema: 1\ntitle: &t Anchor\nlanes:\n  - title: To Do\n", encoding="utf-8")
+        messages = " | ".join(p.message for p in lt.validate_file(anchor_only))
+        if "anchors and aliases" not in messages:
+            failures.append(f"anchor without alias: expected refusal, got: {messages or '(none)'}")
+        else:
+            print(f"PASS  a bare anchor is refused too: {messages}")
+    return failures
+
+
+def check_unparseable_values() -> list[str]:
+    """A value PyYAML itself chokes on, or a merge key, gets a readable
+    message — never a traceback."""
+    failures: list[str] = []
+    cases = {
+        "an unquoted 5000-digit integer": ("schema: 1\ntemplate: {order: " + "9" * 5000 + "}\n", "not a valid value"),
+        "an inline merge key": ("schema: 1\ntitle: T\n<<: {title: X}\n", "merge keys"),
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        for label, (text, needle) in cases.items():
+            path = pathlib.Path(tmp) / "case.lanework-template"
+            path.write_text(text, encoding="utf-8")
+            try:
+                problems = lt.validate_file(path)
+            except Exception as exc:
+                failures.append(f"{label}: validate_file raised {type(exc).__name__}: {exc}")
+                continue
+            messages = " | ".join(p.message for p in problems)
+            if needle not in messages:
+                failures.append(f"{label}: expected a message containing {needle!r}, got: {messages or '(none)'}")
+            else:
+                print(f"PASS  {label} gets a readable message: {messages}")
+    return failures
+
+
+def _run(cmd: list[str], cwd: pathlib.Path, env: dict) -> "subprocess.CompletedProcess[str]":
+    return subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
+
+
+def check_tracked_files_only() -> list[str]:
+    """A Finder `.DS_Store` beside the seeds must not turn local lint red
+    while CI, from a clean checkout, stays green. Runs both entry points
+    (`scripts/lint.sh`, and CI's `validate_templates.py --annotate templates`)
+    in a throwaway git repo and requires the same verdict from each."""
+    failures: list[str] = []
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull}
+    for var in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
+        env.pop(var, None)
+
+    def entry_points(repo: pathlib.Path) -> dict[str, int]:
+        lint = _run(["bash", "scripts/lint.sh"], repo, env)
+        ci = _run([sys.executable, "scripts/validate_templates.py", "--annotate", "templates"], repo, env)
+        return {"lint.sh": lint.returncode, "ci": ci.returncode}
+
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = pathlib.Path(tmp)
+        shutil.copytree(lt.REPO_ROOT / "scripts", repo / "scripts", ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copytree(lt.REPO_ROOT / "schema", repo / "schema")
+        shutil.copytree(lt.TEMPLATES_DIR, repo / "templates")
+        init = _run(["git", "init", "-q"], repo, env)
+        if init.returncode != 0:
+            return [f"could not `git init` a scratch repo: {init.stderr.strip()}"]
+        _run(["git", "add", "templates"], repo, env)
+
+        (repo / "templates" / ".DS_Store").write_bytes(b"\x00\x00\x00\x01Bud1")
+        got = entry_points(repo)
+        if got != {"lint.sh": 0, "ci": 0}:
+            failures.append(f".DS_Store beside tracked seeds: expected both entry points green, got exit codes {got}")
+        else:
+            print("PASS  an untracked .DS_Store beside the seeds keeps lint.sh and CI's check green")
+
+        _run(["git", "add", "-f", "templates/.DS_Store"], repo, env)
+        got = entry_points(repo)
+        if got != {"lint.sh": 1, "ci": 1}:
+            failures.append(f"a TRACKED .DS_Store: expected both entry points red, got exit codes {got}")
+        else:
+            print("PASS  a tracked stray file still fails lint.sh and CI's check, both the same")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        plain = pathlib.Path(tmp)
+        shutil.copytree(lt.TEMPLATES_DIR, plain / "templates")
+        (plain / "templates" / ".DS_Store").write_bytes(b"\x00")
+        problems = lt.check_templates_directory(plain / "templates")
+        if not any(p.file and p.file.name == ".DS_Store" for p in problems):
+            failures.append("outside a git repo: expected the directory fallback to flag a stray .DS_Store")
+        else:
+            print("PASS  outside a git repo the whole directory is linted (fallback), so a stray file is flagged")
     return failures
 
 
@@ -214,7 +394,11 @@ def main() -> int:
     failures: list[str] = []
     failures += check_seeds_and_fixtures()
     failures += check_build_index_normalization()
+    failures += check_lenient_integer()
+    failures += check_aliases()
+    failures += check_unparseable_values()
     failures += check_directory_rules()
+    failures += check_tracked_files_only()
     failures += check_size_cap_and_encoding()
 
     if failures:
@@ -223,7 +407,7 @@ def main() -> int:
             print(f"  - {failure}", file=sys.stderr)
         return 1
 
-    good_count = len(list(lt.TEMPLATES_DIR.glob("*.lanework-template"))) + len(GOOD_EDGE_CASES)
+    good_count = len(lt.list_templates(lt.TEMPLATES_DIR)) + len(GOOD_EDGE_CASES)
     print(f"\n{good_count} good descriptor(s), {len(EXPECTED_BAD)} bad fixture(s), "
           "build_index normalization and directory rules — all as expected")
     return 0
