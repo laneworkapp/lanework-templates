@@ -52,17 +52,18 @@ GOOD_EDGE_CASES = (
     "fractional-order.lanework-template",
     "out-of-range-order.lanework-template",
     "padded-order.lanework-template",
+    "huge-digit-order.lanework-template",
 )
 
 # Good fixtures whose `template.order` has no reading: schema-valid, but
 # omitted from index.json rather than emitted raw.
-OMITTED_ORDER = ("fractional-order", "out-of-range-order", "padded-order")
+OMITTED_ORDER = ("fractional-order", "out-of-range-order", "padded-order", "huge-digit-order")
 
 
 def check_seeds_and_fixtures() -> list[str]:
     failures: list[str] = []
 
-    for f in sorted(lt.TEMPLATES_DIR.glob("*.lanework-template")):
+    for f in lt.list_templates(lt.TEMPLATES_DIR):
         problems = lt.validate_file(f)
         if problems:
             failures.append(f"templates/{f.name}: expected valid, got {[p.message for p in problems]}")
@@ -107,15 +108,15 @@ def check_build_index_normalization() -> list[str]:
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = pathlib.Path(tmp)
-        for f in lt.TEMPLATES_DIR.glob("*.lanework-template"):
+        for f in lt.list_templates(lt.TEMPLATES_DIR):
             shutil.copy(f, tmp_path / f.name)
         for name in GOOD_EDGE_CASES:
             shutil.copy(GOOD_FIXTURES_DIR / name, tmp_path / name)
 
         try:
             entries = bi.build(tmp_path)
-        except TypeError as exc:
-            failures.append(f"build_index.build() crashed on mixed lenient order/title values: {exc}")
+        except Exception as exc:
+            failures.append(f"build_index.build() crashed on mixed lenient order/title values: {type(exc).__name__}: {exc}")
             return failures
 
     by_slug = {e["slug"]: e for e in entries}
@@ -165,6 +166,10 @@ def check_lenient_integer() -> list[str]:
         (str(int64_max), int64_max),
         (int64_min, int64_min),
         (str(int64_min), int64_min),
+        ("9" * 5000, None),  # past Python's 4300-digit int() limit: must not raise
+        ("-" + "9" * 5000, None),
+        ("0" * 5000 + "1", 1),  # leading zeros don't count toward the bound
+        ("9" * 19, None),
         (int64_max + 1, None),
         (str(int64_max + 1), None),
         (int64_min - 1, None),
@@ -186,7 +191,14 @@ def check_lenient_integer() -> list[str]:
         (True, None),
         (None, None),
     ]
-    bad = [(v, want, lt.read_lenient_integer(v)) for v, want in cases if lt.read_lenient_integer(v) != want]
+    bad = []
+    for v, want in cases:
+        try:
+            got = lt.read_lenient_integer(v)
+        except Exception as exc:  # a crash here is what takes the index job down
+            got = f"raised {type(exc).__name__}: {exc}"
+        if got != want:
+            bad.append((v if not isinstance(v, str) or len(v) < 40 else v[:12] + f"...({len(v)} chars)", want, got))
     for value, want, got in bad:
         failures.append(f"read_lenient_integer({value!r}): expected {want!r}, got {got!r}")
     if not bad:
@@ -221,6 +233,31 @@ def check_aliases() -> list[str]:
             failures.append(f"anchor without alias: expected refusal, got: {messages or '(none)'}")
         else:
             print(f"PASS  a bare anchor is refused too: {messages}")
+    return failures
+
+
+def check_unparseable_values() -> list[str]:
+    """A value PyYAML itself chokes on, or a merge key, gets a readable
+    message — never a traceback."""
+    failures: list[str] = []
+    cases = {
+        "an unquoted 5000-digit integer": ("schema: 1\ntemplate: {order: " + "9" * 5000 + "}\n", "not a valid value"),
+        "an inline merge key": ("schema: 1\ntitle: T\n<<: {title: X}\n", "merge keys"),
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        for label, (text, needle) in cases.items():
+            path = pathlib.Path(tmp) / "case.lanework-template"
+            path.write_text(text, encoding="utf-8")
+            try:
+                problems = lt.validate_file(path)
+            except Exception as exc:
+                failures.append(f"{label}: validate_file raised {type(exc).__name__}: {exc}")
+                continue
+            messages = " | ".join(p.message for p in problems)
+            if needle not in messages:
+                failures.append(f"{label}: expected a message containing {needle!r}, got: {messages or '(none)'}")
+            else:
+                print(f"PASS  {label} gets a readable message: {messages}")
     return failures
 
 
@@ -359,6 +396,7 @@ def main() -> int:
     failures += check_build_index_normalization()
     failures += check_lenient_integer()
     failures += check_aliases()
+    failures += check_unparseable_values()
     failures += check_directory_rules()
     failures += check_tracked_files_only()
     failures += check_size_cap_and_encoding()
@@ -369,7 +407,7 @@ def main() -> int:
             print(f"  - {failure}", file=sys.stderr)
         return 1
 
-    good_count = len(list(lt.TEMPLATES_DIR.glob("*.lanework-template"))) + len(GOOD_EDGE_CASES)
+    good_count = len(lt.list_templates(lt.TEMPLATES_DIR)) + len(GOOD_EDGE_CASES)
     print(f"\n{good_count} good descriptor(s), {len(EXPECTED_BAD)} bad fixture(s), "
           "build_index normalization and directory rules — all as expected")
     return 0
