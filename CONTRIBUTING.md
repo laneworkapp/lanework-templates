@@ -56,11 +56,10 @@ kept byte-identical to its source (nothing here is a hand-edit of it):
   or on a card. Those are minted only once the app turns this descriptor
   into a real board; a descriptor has no identity and no history of its
   own.
-- **No `order`, on a lane or a card** — a lane's or card's position is its
-  index in the `lanes:`/`cards:` list, not a key it carries. (`order` at
-  the descriptor *root* is a different, currently-open gap: the schema
-  doesn't yet forbid it there, so it's silently accepted as an inert extra
-  key. It does nothing — don't rely on it; it's filed upstream to close.)
+- **No `order`, at the root, on a lane or on a card** — a lane's or card's
+  position is its index in the `lanes:`/`cards:` list, not a key it carries,
+  and the root's chooser position is `template.order`, one level down. A
+  root `order` is refused the same as the other two.
 - **No `cards:` at the root**, and **no `lanes:` inside a lane** or
   **`cards:` inside a card** — nesting only goes as deep as
   `lanes: [ { cards: [ ... ] } ]`.

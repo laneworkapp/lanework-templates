@@ -4,9 +4,9 @@
 this directory are a vendored copy of `Schema/1/` from the Lanework app repo
 (private — CI here cannot fetch it directly, so the copy is checked in).
 
-- **Source commit**: `c013d1d39d115521de73c253830f67756bc903d4`
+- **Source commit**: `6eddde8026c942f1be29302f292207d565d981b8`
 - **Source path**: `Schema/1/`
-- **Synced**: 2026-09-28
+- **Synced**: 2026-09-30
 
 Refresh with `scripts/sync-schema.sh <path-to-a-Lanework-checkout>`, which
 copies the five files from `<path>/Schema/1/` and rewrites the two lines

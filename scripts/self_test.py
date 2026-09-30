@@ -43,6 +43,7 @@ EXPECTED_BAD = {
     "duplicate-key.lanework-template": "duplicate key",
     "trailing-newline-author-url.lanework-template": "must not end in whitespace or a newline",
     "alias.lanework-template": "anchors and aliases",
+    "root-order.lanework-template": "`order` is not allowed at the descriptor root",
 }
 
 # good (schema-valid) edge-case fixtures that must validate clean.

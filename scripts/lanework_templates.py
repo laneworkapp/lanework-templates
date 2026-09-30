@@ -434,6 +434,11 @@ def _forbidden_message(key: Any, path: tuple) -> str:
     if key == "lanes":
         return "`lanes` is not allowed here: `lanes:` only nests at the descriptor root"
     if key == "order":
+        if len(path) == 1:
+            return (
+                "`order` is not allowed at the descriptor root: nothing in a descriptor "
+                "carries its own position — the chooser position is `template.order`"
+            )
         return (
             "`order` is not allowed here: a descriptor lane or card's position is "
             "its index in the list, not an `order` key"
