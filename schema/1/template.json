@@ -36,6 +36,10 @@
     "cards" : {
       "$ref" : "common.json#/$defs/template-descriptor-forbidden",
       "description" : "Forbidden at the root (review round 1, N3): a board's starter cards nest inside a `lanes:` entry, never at the top — there is no board-less card. Present with any value, this key fails validation outright."
+    },
+    "order" : {
+      "$ref" : "common.json#/$defs/template-descriptor-forbidden",
+      "description" : "Forbidden at the root, the same rule as a lane's or a card's `order` (card 07ff3331): nothing in a descriptor carries its own position. The chooser position lives one level down, at `template.order`, and a root `order` is the likeliest near-miss for it, so it is refused rather than silently ignored. Present with any value, this key fails validation outright."
     }
   },
   "additionalProperties" : true,
