@@ -156,6 +156,10 @@ class _AnchorError(Exception):
         super().__init__(f"{token} at line {line}")
 
 
+class _MergeKeyError(_AnchorError):
+    """The document uses a `<<` merge key."""
+
+
 class _StrictSafeLoader(yaml.SafeLoader):
     """A `SafeLoader` that refuses a mapping key repeated at any depth, and
     any anchor or alias.
@@ -179,6 +183,13 @@ class _StrictSafeLoader(yaml.SafeLoader):
             event = self.peek_event()
             raise _AnchorError(f"alias `*{event.anchor}`", event.start_mark.line + 1)
         event = self.peek_event()
+        if (
+            isinstance(event, yaml.ScalarEvent)
+            and event.value == "<<"
+            and event.implicit[0]
+            and event.tag is None
+        ):
+            raise _MergeKeyError("merge key `<<`", event.start_mark.line + 1)
         if getattr(event, "anchor", None) is not None:
             raise _AnchorError(f"anchor `&{event.anchor}`", event.start_mark.line + 1)
         return super().compose_node(parent, index)
@@ -260,6 +271,11 @@ def parse_yaml(path: pathlib.Path) -> tuple[Any, str | None]:
         data = yaml.load(text, Loader=_StrictSafeLoader)
     except _DuplicateKeyError as exc:
         return None, f"duplicate key {exc.key!r} at {exc.pointer}: a mapping may not repeat a key"
+    except _MergeKeyError as exc:
+        return None, (
+            f"YAML merge keys (`<<:`) are not allowed: found {exc.token} "
+            f"at line {exc.line} — write the values out in full"
+        )
     except _AnchorError as exc:
         return None, (
             f"YAML anchors and aliases (`&name`, `*name`) are not allowed: found {exc.token} "
@@ -269,6 +285,10 @@ def parse_yaml(path: pathlib.Path) -> tuple[Any, str | None]:
         return None, "descriptor is too deeply nested to parse"
     except yaml.YAMLError as exc:
         return None, f"invalid YAML: {_truncate(str(exc))}"
+    except ValueError as exc:
+        # e.g. an unquoted integer past Python's 4300-digit int() limit,
+        # raised from inside PyYAML's own constructor.
+        return None, f"not a valid value: {_truncate(str(exc))}"
     return data, None
 
 
@@ -554,7 +574,16 @@ def read_lenient_integer(value: Any) -> int | None:
     if isinstance(value, str):
         if _ASCII_INTEGER_RE.fullmatch(value) is None:
             return None
-        return _int64(int(value))
+        # Bound the digit count before int() runs: Python refuses to parse
+        # more than 4300 digits (ValueError), and Int64 has at most 19.
+        # Leading zeros carry no value, so they don't count.
+        digits = value.lstrip("+-").lstrip("0")
+        if len(digits) > 19:
+            return None
+        try:
+            return _int64(int(("-" if value.startswith("-") else "") + (digits or "0")))
+        except ValueError:
+            return None
     return None
 
 
