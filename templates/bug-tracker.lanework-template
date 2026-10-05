@@ -3,6 +3,18 @@ title: Bug Tracker
 icon: {glyph: ant, color: carnation}
 template: {order: 1000, author: {name: Lanework, url: "https://github.com/laneworkapp"}}
 body: Chase bugs from first report to verified fix.
+config:
+  labels:
+    - type: priority
+      text: Priority
+      icon: {glyph: flag}
+      single: true
+      values:
+        - {text: Urgent, rank: 0, color: "#C8283C", icon: {glyph: exclamationmark.2}}
+        - {text: High, rank: 1, color: "#E07A1F", icon: {glyph: exclamationmark}}
+        - {text: Medium, rank: 2}
+        - {text: Low, rank: 3, icon: {glyph: arrow.down}}
+    - {type: component, text: Component, color: aluminum, icon: {glyph: puzzlepiece}, single: true}
 lanes:
   - title: Reported
     icon: {glyph: exclamationmark.bubble, color: carnation}

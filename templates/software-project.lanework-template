@@ -3,6 +3,18 @@ title: Software Project
 icon: {glyph: chevron.left.forwardslash.chevron.right, color: deep-sky-blue}
 template: {order: 300, author: {name: Lanework, url: "https://github.com/laneworkapp"}}
 body: Track features from backlog through review to shipped.
+config:
+  labels:
+    - type: priority
+      text: Priority
+      icon: {glyph: flag}
+      single: true
+      values:
+        - {text: Urgent, rank: 0, color: "#C8283C", icon: {glyph: exclamationmark.2}}
+        - {text: High, rank: 1, color: "#E07A1F", icon: {glyph: exclamationmark}}
+        - {text: Medium, rank: 2}
+        - {text: Low, rank: 3, icon: {glyph: arrow.down}}
+    - {type: component, text: Component, color: aluminum, icon: {glyph: puzzlepiece}, single: true}
 lanes:
   - title: Backlog
     icon: {glyph: tray.2, color: deep-cool-granite}
