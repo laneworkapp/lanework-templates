@@ -262,6 +262,48 @@ def check_unparseable_values() -> list[str]:
     return failures
 
 
+def check_order_decimal() -> list[str]:
+    """A bare (unquoted) `template.order` must be plain decimal: YAML 1.1
+    reads `0x10` as 16 and `017` as 15, which an author never meant. Quoted
+    values keep the lenient reading and are left alone."""
+    failures: list[str] = []
+    refused = {
+        "0x10": "16",
+        "017": "15",
+        "1_000": "1000",
+        "1:30": "90",
+        "0b101": "5",
+        "0o17": None,  # PyYAML reads these three as text or a float, not an int
+        "1e3": None,
+        "019": None,
+        ".5": "0.5",
+    }
+    accepted = ["100", "-5", "+5", "0", "100.0", "1.5", "99999999999999999999", '"100"', '" 100 "', '"0x10"', '"1e3"']
+
+    def problems_for(spelling: str, flow: bool) -> str:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "case.lanework-template"
+            template = f"template: {{order: {spelling}}}\n" if flow else f"template:\n  order: {spelling}\n"
+            path.write_text("schema: 1\ntitle: T\n" + template + "lanes:\n  - title: To Do\n", encoding="utf-8")
+            return " | ".join(p.message for p in lt.validate_file(path))
+
+    for flow in (False, True):
+        style = "flow" if flow else "block"
+        for spelling, reading in refused.items():
+            messages = problems_for(spelling, flow)
+            if f"`{spelling}`" not in messages or "template.order" not in messages:
+                failures.append(f"{style} order: {spelling}: expected a refusal naming the spelling, got: {messages or '(none)'}")
+            elif reading is not None and f"reads as {reading}" not in messages:
+                failures.append(f"{style} order: {spelling}: refusal should name the reading {reading}, got: {messages}")
+        for spelling in accepted:
+            messages = problems_for(spelling, flow)
+            if "template.order" in messages:
+                failures.append(f"{style} order: {spelling}: expected it accepted, got: {messages}")
+    if not failures:
+        print(f"PASS  a bare non-decimal template.order is refused ({len(refused)} spellings, block and flow); {len(accepted)} decimal and quoted forms still pass")
+    return failures
+
+
 def _run(cmd: list[str], cwd: pathlib.Path, env: dict) -> "subprocess.CompletedProcess[str]":
     return subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
 
@@ -398,6 +440,7 @@ def main() -> int:
     failures += check_lenient_integer()
     failures += check_aliases()
     failures += check_unparseable_values()
+    failures += check_order_decimal()
     failures += check_directory_rules()
     failures += check_tracked_files_only()
     failures += check_size_cap_and_encoding()

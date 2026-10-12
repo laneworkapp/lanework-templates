@@ -160,6 +160,24 @@ class _MergeKeyError(_AnchorError):
     """The document uses a `<<` merge key."""
 
 
+class _OrderSpellingError(Exception):
+    """A bare `template.order` is not written as a plain decimal number."""
+
+    def __init__(self, text: str, reading: Any, line: int) -> None:
+        self.text = text
+        self.reading = reading
+        self.line = line
+        super().__init__(f"template.order written {text!r} at line {line}")
+
+
+# What a bare `template.order` may look like: an optionally signed decimal
+# with no leading zeros and an optional plain fraction. YAML 1.1 (PyYAML and
+# the app's Yams) also reads `0x10`, `017`, `1_000`, `1:30`, `0b101`, `0o17`
+# and `1e3` as numbers an author did not mean, so those are refused. A
+# quoted value is a string, not one of those readings, and is left alone.
+_PLAIN_DECIMAL_ORDER = re.compile(r"[+-]?(0|[1-9][0-9]*)(\.[0-9]+)?")
+
+
 class _StrictSafeLoader(yaml.SafeLoader):
     """A `SafeLoader` that refuses a mapping key repeated at any depth, and
     any anchor or alias.
@@ -217,6 +235,14 @@ def _construct_mapping_no_dupes(loader: _StrictSafeLoader, node: yaml.Node) -> d
         finally:
             path.pop()
             loader._lt_path = path
+        if (
+            list(path) == ["template"]
+            and key == "order"
+            and isinstance(value_node, yaml.ScalarNode)
+            and value_node.style is None
+            and not _PLAIN_DECIMAL_ORDER.fullmatch(value_node.value)
+        ):
+            raise _OrderSpellingError(value_node.value, value, value_node.start_mark.line + 1)
         mapping[key] = value
     return mapping
 
@@ -271,6 +297,15 @@ def parse_yaml(path: pathlib.Path) -> tuple[Any, str | None]:
         data = yaml.load(text, Loader=_StrictSafeLoader)
     except _DuplicateKeyError as exc:
         return None, f"duplicate key {exc.key!r} at {exc.pointer}: a mapping may not repeat a key"
+    except _OrderSpellingError as exc:
+        if isinstance(exc.reading, (int, float)) and not isinstance(exc.reading, bool):
+            reads = f"which YAML reads as {exc.reading}"
+        else:
+            reads = "which is not a plain decimal number"
+        return None, (
+            f"template.order is written `{exc.text}` at line {exc.line}, {reads}: "
+            "write a plain decimal such as `100`, or quote it"
+        )
     except _MergeKeyError as exc:
         return None, (
             f"YAML merge keys (`<<:`) are not allowed: found {exc.token} "
