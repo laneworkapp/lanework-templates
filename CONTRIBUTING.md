@@ -84,6 +84,10 @@ builds):
   error: a fractional value (`1.5`), a value outside the 64-bit signed
   range, a padded string (`" 100 "`), an exponent (`"1e20"`) or non-ASCII
   digits.
+  A **bare** (unquoted) `order` must be plain decimal, though: `0x10`,
+  `017`, `1_000`, `1:30`, `0b101`, `0o17`, `1e3` and `.5` are refused with
+  a message naming what YAML reads them as (`017` is 15, not 17). Write
+  `100`, or quote the value to keep the loose reading above.
 - `author: {name, url}` — shown on the template's Gallery row and in the
   chooser's footer. **`url` must be a GitHub profile link**,
   `https://github.com/<user>`, with no control characters and no trailing
