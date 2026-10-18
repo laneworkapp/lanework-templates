@@ -4,4 +4,13 @@ template: {order: 100, author: {name: Lanework, url: "https://github.com/lanewor
 body: 'A simple two-step board: things to do, things done.'
 lanes:
   - title: To Do
+    cards:
+      - title: Drag me to Done
+        body: Grab this card and drop it in the Done lane. That is all moving work takes.
+      - title: Add a card of your own
+        body: Double-click empty space in a lane, or press ⌘N, then type a title.
+      - title: This card is a file
+        body: Every card is a Markdown file in your board's folder. Choose Reveal in Finder from the board's menu, find this card's folder and open its index.md in any text editor.
+      - title: Send me to the Trash
+        body: Right-click a card and choose Send to Trash. Nothing on this board is special, and it is all yours to change.
   - title: Done
