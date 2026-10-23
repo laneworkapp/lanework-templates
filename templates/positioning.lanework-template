@@ -1,0 +1,82 @@
+schema: 1
+title: Positioning
+icon: {glyph: scope, color: smokey-tangerine}
+template: {order: 500, author: {name: Lanework, url: "https://github.com/laneworkapp"}}
+config:
+  show-card-body: 3
+  labels:
+    - type: status
+      text: Status
+      single: true
+      values:
+        - {text: candidate, rank: 1, color: "#E07A1F"}
+        - {text: accepted, rank: 2, color: fern}
+        - {text: dropped, rank: 3, color: aluminum}
+body: |
+  Work out how to position a product, following April Dunford's method from *Obviously Awesome*: start from the customers who already love it, list what they would use instead, keep only the attributes those alternatives lack, group them into the value they deliver, find who cares most, and choose a market frame that puts those strengths at the centre. Lanes are the components of a position, not stages of a pipeline. A card is one piece of evidence or one candidate; it is filed into the lane it belongs to and stays there. The result is one accepted card in Position: a one-page canvas and the sentence people repeat back.
+
+  ## How this board works
+
+  - **Work left to right, one lane at a time, but file into any lane as evidence arrives.** The lane order is the dependency order: alternatives come from real customers, attributes are judged against alternatives, themes group attributes, segments are ranked by themes, frames are chosen for the themes. A card in a later lane cites the earlier cards it rests on, by link, on its first line.
+  - **Status is a single label.** `candidate` when filed, `accepted` or `dropped` when the owner rules. Only the owner accepts or drops; an agent files candidates and argues in the thread. A dropped card stays in its lane with one line in the body saying why, so the reasoning is never lost.
+  - **Evidence over opinion.** A Best-fit customer is a real, described person who uses the product and likes it, never a persona. A phrase anywhere on the board that is a customer's words is quoted and dated with its source: an interview, an email, a review, a chat. Agent reasoning goes in the thread, never dressed up as a quote.
+  - **Honest attributes only.** An attribute an accepted alternative also has is dropped, not argued. "Better" is not an attribute; what the product does that the alternatives do not is. Each attribute card names the alternatives it beats and the ones it shares the attribute with.
+  - **Baggage is on purpose.** Any word, frame or assumption the team decides not to carry gets a card there with the reason: the old tagline, the founder's favourite phrase, a category name that now means something else. Check every candidate frame and sentence against Baggage before accepting it.
+  - **Concrete over abstract.** Prefer what a person can picture doing over a quality they are told about. Every attribute card has a "what a person can picture" line. Questions to the owner name one card and ask for one ruling.
+  - **Complements are not alternatives.** If the owner says a thing is used alongside the product rather than instead of it, record that reading on the card; it often reveals where the product sits in a workflow, which is a frame candidate in its own right.
+  - **Market frame has three styles**, and every frame card says which: head-to-head in an existing category, a subsegment of an existing category, or a new category. Head-to-head is hardest for a newcomer; a subsegment is usually where a small product with a sharp difference wins. A trend may be layered on a frame but never replaces it.
+  - **Position is the only lane whose cards get rewritten.** Candidate sentences are tested by telling them to real people and recording what they repeat back a day later; test results go in the thread, and the sentence that survives is accepted. The canvas card lists, in order: competitive alternatives, unique attributes, value themes, who cares most, market frame, trends.
+  - **Nothing is built from this board.** Copy, listings and launch plans are filed on the product's own boards once a position is accepted, linking the Position card.
+lanes:
+  - title: Best-fit customers
+    icon: {glyph: person.crop.circle.badge.checkmark, color: fern}
+    body: One card per real person who uses the product and likes it, with who they are, what they used before, what they still use alongside, and why they would not go back, in their words. An agent files a card when the owner names a person or a conversation yields one, and the owner confirms the fit.
+    cards:
+      - title: Start here
+        body: |
+          Name the people who already use the product and like it. Three or four is enough; one is a start. For each, answer three things in a line: who they are, what they used for the same purpose before, and what they still use alongside. If the only user so far is the maker, that is a real answer, and the maker is the first card.
+
+          Then ask each of them one question and quote the answer here: "If this product disappeared tomorrow, what would you go back to?" That answer is what fills the Alternatives lane.
+
+          Trash this card once the first real customer card is filed.
+  - title: Baggage
+    icon: {glyph: suitcase, color: aluminum}
+    collapsed: true
+    body: Words, frames and assumptions deliberately not carried into this study, one per card with the reason. An agent files one when a drop is agreed, and the owner may drop or restore any card.
+    cards:
+      - title: What goes here
+        body: |
+          The old tagline. The founder's favourite phrase. A category name that now means a different kind of product. An audience ruling made before the evidence. Earlier drafts and analyst guesses. Each gets a card that says what it is and why it is not carried forward, so nobody mistakes an early draft for a tested position, and so a later frame can be checked against the list.
+
+          Trash this card once the first real Baggage card is filed.
+  - title: Alternatives
+    icon: {glyph: arrow.triangle.branch, color: deep-sky-blue}
+    body: One card per thing a best-fit customer would use if the product vanished, including a spreadsheet, a text file and nothing, each linking the customer cards it came from. An agent files one when a customer card names it, and the owner rules which are the real alternatives.
+  - title: Unique attributes
+    icon: {glyph: sparkles, color: smokey-tangerine}
+    body: One card per thing the product does that the accepted alternatives do not, naming the alternatives it beats and those that share it, with an honesty check and a line on what a person can picture. An agent files candidates against the accepted alternatives, and the owner accepts or drops each.
+  - title: Value themes
+    icon: {glyph: square.stack.3d.up, color: pale-violet}
+    body: Three to five cards, each a value a customer feels, grouping the accepted attribute cards that deliver it. An agent proposes the grouping once attributes are accepted, and the owner rules the themes.
+  - title: Who cares most
+    icon: {glyph: person.3, color: deep-cool-granite}
+    body: One card per candidate segment, ranked by how many accepted themes land for it and how easy it is to reach, with the evidence behind it or an honest note that there is none yet. An agent files segments from the customer and theme cards, and the owner ranks them.
+  - title: Market frame
+    icon: {glyph: rectangle.3.group, color: deep-sky-blue}
+    body: One card per candidate category frame, tagged head-to-head, subsegment or new category, plus one card per trend worth layering on. An agent files candidates once themes and the top segment are accepted, and the owner picks the frame.
+  - title: Position
+    icon: {glyph: scope, color: smokey-tangerine}
+    body: The assembled result, the one-page canvas and the candidate sentences, with repeat-back tests recorded in the thread. An agent assembles and rewrites cards here from the accepted cards upstream, and the owner accepts the one that survives testing.
+    cards:
+      - title: Canvas
+        body: |
+          Rewrite this card as the lanes to its left are accepted. Keep the order; each line links the cards it summarises.
+
+          **Competitive alternatives**: what customers would use instead.
+          **Unique attributes**: what only this product does, against those alternatives.
+          **Value themes**: what those attributes let a customer do or feel.
+          **Who cares most**: the segment for whom the most themes land.
+          **Market frame**: the category word readers already know, and the style of the frame.
+          **Trends**: anything layered on, or none.
+
+          **Candidate sentences**: one per line, each telling who it is for, what it does and what it replaces, in words a customer would repeat. Test each by telling it to five people and recording in the thread what they say back a day later.
