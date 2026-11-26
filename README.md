@@ -1,6 +1,6 @@
 # Lanework Templates
 
-Board templates for [Lanework](https://github.com/laneworkapp), the Mac kanban app whose boards are plain folders of Markdown. The New Board chooser lists these templates as the **Gallery**, and the app bundles a few of them so they work offline.
+Board templates for [Lanework](https://laneworkapp.com), the Mac kanban app whose boards are plain folders of Markdown. The New Board chooser lists these templates as the **Gallery**, and the app bundles a few of them so they work offline.
 
 ## Key features
 
